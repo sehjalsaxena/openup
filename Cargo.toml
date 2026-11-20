@@ -1,0 +1,24 @@
+[package]
+name = "openup"
+version = "0.1.0"
+edition = "2024"
+rust-version = "1.89"
+authors = ["Sehjal Saxena"]
+repository = "https://github.com/sehjalsaxena/openup"
+description = "OpenUp: a terminal dashboard and background keeper that logs you through campus captive portals"
+readme = "README.md"
+
+[dependencies]
+rpassword = "7"
+reqwest = { version = "0.12", default-features = false, features = ["blocking", "rustls-tls"] }
+dirs = "6.0"
+url = "2.5"
+ratatui = "0.29"
+regex = "1.11"
+serde = { version = "1.0", features = ["derive"] }
+serde_json = "1.0"
+
+[profile.release]
+lto = true
+codegen-units = 1
+strip = true

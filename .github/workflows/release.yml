@@ -1,0 +1,83 @@
+name: Release
+
+on:
+  push:
+    tags:
+      - 'v*'
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  release:
+    name: Build & Release (${{ matrix.target }})
+    runs-on: ${{ matrix.os }}
+    permissions:
+      contents: write # needed to attach assets to the release
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - os: ubuntu-latest
+            target: x86_64-unknown-linux-gnu
+            asset_name: openup-linux-amd64.tar.gz
+          - os: ubuntu-24.04-arm
+            target: aarch64-unknown-linux-gnu
+            asset_name: openup-linux-arm64.tar.gz
+          - os: macos-latest
+            target: aarch64-apple-darwin
+            asset_name: openup-darwin-arm64.tar.gz
+          - os: macos-latest
+            target: x86_64-apple-darwin
+            asset_name: openup-darwin-amd64.tar.gz
+          - os: windows-latest
+            target: x86_64-pc-windows-msvc
+            asset_name: openup-windows-amd64.zip
+
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4.4.0
+
+      - name: Install Rust toolchain
+        uses: dtolnay/rust-toolchain@39008827e6b4319a349e9a42dfc90579dd25f1ca # stable
+        with:
+          targets: ${{ matrix.target }}
+
+      - name: Run tests before shipping
+        run: cargo test --locked --all-targets
+
+      - name: Build binary
+        run: cargo build --locked --release --target ${{ matrix.target }}
+
+      - name: Package archive (Unix)
+        if: runner.os != 'Windows'
+        run: |
+          cd target/${{ matrix.target }}/release
+          tar -czf ../../../${{ matrix.asset_name }} openup
+          cd ../../..
+
+      - name: Package archive (Windows)
+        if: runner.os == 'Windows'
+        shell: pwsh
+        run: |
+          Compress-Archive -Path target/${{ matrix.target }}/release/openup.exe -DestinationPath ${{ matrix.asset_name }}
+
+      # The install scripts download "<asset>.sha256" and refuse to install on a mismatch.
+      - name: Checksum (Unix)
+        if: runner.os != 'Windows'
+        run: shasum -a 256 "${{ matrix.asset_name }}" > "${{ matrix.asset_name }}.sha256"
+
+      - name: Checksum (Windows)
+        if: runner.os == 'Windows'
+        shell: pwsh
+        run: |
+          $hash = (Get-FileHash -Algorithm SHA256 '${{ matrix.asset_name }}').Hash.ToLower()
+          Set-Content -Path '${{ matrix.asset_name }}.sha256' -Encoding ascii -Value "$hash  ${{ matrix.asset_name }}"
+
+      - name: Publish Release Assets
+        uses: softprops/action-gh-release@3bb12739c298aeb8a4eeaf626c5b8d85266b0e65 # v2.6.2
+        with:
+          files: |
+            ${{ matrix.asset_name }}
+            ${{ matrix.asset_name }}.sha256
