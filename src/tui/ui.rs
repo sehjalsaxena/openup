@@ -134,8 +134,15 @@ fn render_status(f: &mut Frame, area: Rect, app: &App) {
         NetState::Checking => vec![dim("checking...")],
         NetState::Online => {
             let mut v = vec![colored("online", Color::Green)];
+            let mut details = Vec::new();
             if let Some(ip) = &st.last_local_ip {
-                v.push(dim(format!("  ({ip})")));
+                details.push(ip.clone());
+            }
+            if let Some(ms) = app.ping_ms {
+                details.push(format!("{ms} ms"));
+            }
+            if !details.is_empty() {
+                v.push(dim(format!("  ({})", details.join(", "))));
             }
             v
         }

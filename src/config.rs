@@ -133,11 +133,22 @@ pub fn write_private(path: &Path, bytes: &[u8]) -> io::Result<()> {
 
 /// User-editable settings, stored as `settings.json`. Unknown/missing fields fall
 /// back to defaults so the file stays forward and backward compatible.
-#[derive(Serialize, Deserialize, Default, Debug, Clone, PartialEq, Eq)]
+#[derive(Serialize, Deserialize, Debug, Clone, PartialEq, Eq)]
 #[serde(default)]
 pub struct Settings {
     /// Wi-Fi networks OpenUp may (re)connect to by itself. Empty = never touch Wi-Fi.
     pub wifi_ssids: Vec<String>,
+    /// Whether desktop notifications are enabled.
+    pub notifications: bool,
+}
+
+impl Default for Settings {
+    fn default() -> Self {
+        Self {
+            wifi_ssids: Vec::new(),
+            notifications: true,
+        }
+    }
 }
 
 impl Settings {

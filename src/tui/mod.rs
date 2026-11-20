@@ -61,7 +61,7 @@ fn event_loop(terminal: &mut DefaultTerminal, dir: &Path) -> io::Result<()> {
         }
 
         while let Ok(msg) = rx.try_recv() {
-            if matches!(msg, Msg::Net(_)) {
+            if matches!(msg, Msg::Net(..)) {
                 probing = false;
             }
             let cmd = app.on_msg(msg);
@@ -203,23 +203,28 @@ fn start_sign_in(app: &mut App, dir: &Path, tx: &Sender<Msg>) {
 fn spawn_probe(dir: &Path, tx: &Sender<Msg>) {
     let (dir, tx) = (dir.to_path_buf(), tx.clone());
     thread::spawn(move || {
-        let _ = tx.send(Msg::Net(probe_once(&dir)));
+        let (net, ping) = probe_once(&dir);
+        let _ = tx.send(Msg::Net(net, ping));
     });
 }
 
-fn probe_once(dir: &Path) -> NetState {
+fn probe_once(dir: &Path) -> (NetState, Option<u64>) {
     let client = match probe::build_fast_client(false) {
         Ok(c) => c,
-        Err(e) => return NetState::Error(e.to_string()),
+        Err(e) => return (NetState::Error(e.to_string()), None),
     };
+    let start = std::time::Instant::now();
     match probe::probe_network(&client, connect::cached_gateway(dir).as_deref()) {
-        ProbeResult::OnlineUnlocked => NetState::Online,
+        ProbeResult::OnlineUnlocked => (
+            NetState::Online,
+            Some(start.elapsed().as_millis() as u64),
+        ),
         ProbeResult::LockedPortal { login_xml_url, .. } => {
             let trusted = matches!(trust::check(dir, &login_xml_url), Verdict::Trusted);
             let host = trust::host_of(&login_xml_url).unwrap_or(login_xml_url);
-            NetState::Portal { host, trusted }
+            (NetState::Portal { host, trusted }, None)
         }
-        ProbeResult::InterfaceOffline => NetState::Offline,
-        ProbeResult::ProbeTimeoutOrError(e) => NetState::Error(e),
+        ProbeResult::InterfaceOffline => (NetState::Offline, None),
+        ProbeResult::ProbeTimeoutOrError(e) => (NetState::Error(e), None),
     }
 }

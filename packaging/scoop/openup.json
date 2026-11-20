@@ -1,0 +1,20 @@
+{
+  "version": "0.1.0",
+  "description": "Terminal dashboard and background keeper for campus captive portals",
+  "homepage": "https://github.com/sehjalsaxena/openup",
+  "license": "Unlicense",
+  "architecture": {
+    "64bit": {
+      "url": "https://github.com/sehjalsaxena/openup/releases/download/v0.1.0/openup-windows-amd64.zip",
+      "bin": "openup.exe"
+    }
+  },
+  "checkver": "github",
+  "autoupdate": {
+    "architecture": {
+      "64bit": {
+        "url": "https://github.com/sehjalsaxena/openup/releases/download/v$version/openup-windows-amd64.zip"
+      }
+    }
+  }
+}

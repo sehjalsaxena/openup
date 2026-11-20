@@ -105,7 +105,7 @@ impl Toast {
 /// Results coming back from background threads.
 #[derive(Debug)]
 pub enum Msg {
-    Net(NetState),
+    Net(NetState, Option<u64>),
     Progress(String),
     OpenDone(Result<Outcome, OpenError>),
     KeeperDone(Result<String, String>),
@@ -153,6 +153,7 @@ pub struct App {
     pub toast: Option<Toast>,
     /// Set while a background job (sign-in, keeper start/stop) is running.
     pub busy: Option<String>,
+    pub ping_ms: Option<u64>,
 }
 
 impl App {
@@ -166,6 +167,7 @@ impl App {
             modal: Modal::None,
             toast: None,
             busy: None,
+            ping_ms: None,
         };
         app.clamp_selection();
         app
@@ -219,8 +221,9 @@ impl App {
 
     pub fn on_msg(&mut self, msg: Msg) -> Command {
         match msg {
-            Msg::Net(n) => {
+            Msg::Net(n, ping) => {
                 self.net = n;
+                self.ping_ms = ping;
                 Command::None
             }
             Msg::Progress(text) => {

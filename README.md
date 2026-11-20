@@ -70,6 +70,18 @@ irm https://raw.githubusercontent.com/sehjalsaxena/openup/main/install.ps1 | iex
 curl -fsSL https://raw.githubusercontent.com/sehjalsaxena/openup/main/install.sh | bash
 ```
 
+Package managers:
+```bash
+# macOS / Linux (Homebrew)
+brew install sehjalsaxena/tap/openup
+
+# Windows (Scoop)
+scoop install https://raw.githubusercontent.com/sehjalsaxena/openup/main/packaging/scoop/openup.json
+
+# Arch Linux (AUR)
+yay -S openup-bin
+```
+
 The installers download the `.sha256` published next to each release asset and **refuse to install on a mismatch** (`OPENUP_SKIP_VERIFY=1` overrides). That catches corrupted or tampered downloads; it can't help if the release itself were compromised.
 
 Or build it yourself (Rust 1.89+):
@@ -116,6 +128,7 @@ Signing in, probing the network and starting the keeper happen in the background
 | `openup portals trust [HOST]` | Allow a portal (no HOST: the one the keeper blocked) |
 | `openup portals forget HOST` | Stop trusting a portal |
 | `openup wifi add SSID` / `remove SSID` / `list` / `clear` | The only Wi-Fi networks OpenUp may rejoin by itself |
+| `openup notify [on\|off\|test]` | Manage or preview desktop notifications |
 | `openup log [-n N]` | Last N (default 30) log lines |
 | `openup --version` / `--help` | |
 

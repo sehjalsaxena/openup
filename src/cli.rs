@@ -6,6 +6,7 @@ use openup::connect::{self, Outcome};
 use openup::daemon;
 use openup::instance;
 use openup::logger;
+use openup::notify;
 use openup::probe::{self, ProbeResult};
 use openup::state::DaemonState;
 use openup::trust::{self, TrustStore};
@@ -38,6 +39,7 @@ Usage:
   openup wifi add|remove SSID   Let OpenUp rejoin this Wi-Fi network by itself
   openup wifi list | clear      Show / clear that list (empty = OpenUp never touches Wi-Fi)
 
+  openup notify [on|off|test]   Manage or test desktop notifications
   openup log [-n N]             Show the last N log lines (default 30)
   openup --version | --help";
 
@@ -67,6 +69,7 @@ pub fn run(args: Vec<String>) -> CliResult {
         Some("startup") => cmd_startup(&dir, rest),
         Some("portals") => cmd_portals(&dir, rest),
         Some("wifi") => cmd_wifi(&dir, rest),
+        Some("notify") => cmd_notify(&dir, rest),
         Some("log") => cmd_log(&dir, rest),
         Some("--version" | "-V" | "version") => {
             println!("{} {}", brand::APP_NAME, env!("CARGO_PKG_VERSION"));
@@ -120,7 +123,10 @@ fn cmd_open(dir: &Path) -> CliResult {
     match connect::open_now(dir, &|m| println!("{m}"), &approve_on_terminal)? {
         Outcome::AlreadyOnline => println!("Already online. Nothing to do."),
         Outcome::LoggedIn { gateway, .. } => {
-            println!("Signed in via {gateway}. The internet is reachable.")
+            if let Ok(c) = config::load_credentials(dir) {
+                notify::notify_login_success(dir, &c.username, &gateway);
+            }
+            println!("Signed in via {gateway}. The internet is reachable.");
         }
     }
     Ok(())
@@ -424,6 +430,54 @@ fn cmd_log(dir: &Path, args: &[String]) -> CliResult {
     Ok(())
 }
 
+fn cmd_notify(dir: &Path, args: &[String]) -> CliResult {
+    match args.first().map(String::as_str) {
+        Some("on" | "enable") => {
+            let mut settings = Settings::load(dir);
+            settings.notifications = true;
+            settings.save(dir)?;
+            println!("Desktop notifications enabled.");
+            notify::notify_wifi_connected(dir, "Test_Network");
+            Ok(())
+        }
+        Some("off" | "disable") => {
+            let mut settings = Settings::load(dir);
+            settings.notifications = false;
+            settings.save(dir)?;
+            println!("Desktop notifications disabled.");
+            Ok(())
+        }
+        Some("test") => {
+            let samples = notify::all_sample_notifications();
+            println!("Triggering sample notifications (no em-dashes):\n");
+            for (i, notif) in samples.iter().enumerate() {
+                println!("  [{}] {}: {}", i + 1, notif.title, notif.body);
+            }
+            if !notify::is_enabled(dir) {
+                println!(
+                    "\n(Note: notifications are currently disabled in settings. Enable with `openup notify on`)"
+                );
+            } else {
+                notify::send_desktop_notification(&samples[0].title, &samples[0].body);
+                println!("\nSent desktop test notification: {}", samples[0].title);
+            }
+            Ok(())
+        }
+        None | Some("status") => {
+            let enabled = notify::is_enabled(dir);
+            let state_str = if enabled { "enabled" } else { "disabled" };
+            println!("Desktop notifications are {state_str}.");
+            println!("Use `openup notify on` or `openup notify off` to change.");
+            println!("Use `openup notify test` to preview notifications.");
+            Ok(())
+        }
+        Some(other) => Err(format!(
+            "Unknown notify subcommand '{other}'. Use on, off, status, or test."
+        )
+        .into()),
+    }
+}
+
 #[derive(Clone, Copy)]
 enum Level {
     Ok,
@@ -500,6 +554,17 @@ fn cmd_doctor(dir: &Path) -> CliResult {
     } else {
         report(Level::Ok, "Auto-login", "active".to_string());
     }
+
+    let notif_enabled = Settings::load(dir).notifications;
+    report(
+        Level::Ok,
+        "Notifications",
+        if notif_enabled {
+            "enabled".to_string()
+        } else {
+            "disabled".to_string()
+        },
+    );
 
     let store = TrustStore::open(dir);
     match probe::build_fast_client(false) {

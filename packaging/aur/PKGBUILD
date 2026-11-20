@@ -1,0 +1,18 @@
+# Maintainer: Sehjal Saxena <sehjalsaxena2008@gmail.com>
+pkgname=openup-bin
+pkgver=0.1.0
+pkgrel=1
+pkgdesc="Terminal dashboard and background keeper for campus captive portals"
+arch=('x86_64' 'aarch64')
+url="https://github.com/sehjalsaxena/openup"
+license=('custom')
+provides=('openup')
+conflicts=('openup')
+source_x86_64=("https://github.com/sehjalsaxena/openup/releases/download/v${pkgver}/openup-linux-amd64.tar.gz")
+source_aarch64=("https://github.com/sehjalsaxena/openup/releases/download/v${pkgver}/openup-linux-arm64.tar.gz")
+sha256sums_x86_64=('SKIP')
+sha256sums_aarch64=('SKIP')
+
+package() {
+    install -Dm755 "${srcdir}/openup" "${pkgdir}/usr/bin/openup"
+}

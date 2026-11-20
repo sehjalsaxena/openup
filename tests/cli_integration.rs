@@ -274,3 +274,28 @@ fn the_whole_trust_then_sign_in_story_through_the_cli() {
 
     assert!(out(&openup(&d, &portal.probe_url(), &["log"])).contains("Signed in via"));
 }
+
+#[test]
+fn notify_command_reports_and_toggles_status() {
+    let d = dir("cli_notify");
+    let o = openup(&d, DEAD_PROBE, &["notify"]);
+    assert!(o.status.success());
+    assert!(out(&o).contains("Desktop notifications are enabled"));
+
+    let o = openup(&d, DEAD_PROBE, &["notify", "off"]);
+    assert!(o.status.success());
+    assert!(out(&o).contains("disabled"));
+
+    let o = openup(&d, DEAD_PROBE, &["notify"]);
+    assert!(out(&o).contains("Desktop notifications are disabled"));
+
+    let o = openup(&d, DEAD_PROBE, &["notify", "on"]);
+    assert!(o.status.success());
+    assert!(out(&o).contains("enabled"));
+
+    let o = openup(&d, DEAD_PROBE, &["notify", "test"]);
+    assert!(o.status.success());
+    let text = out(&o);
+    assert!(text.contains("OpenUp: Signed In"));
+    assert!(!text.contains('—'));
+}

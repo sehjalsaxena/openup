@@ -1,0 +1,17 @@
+PackageIdentifier: sehjalsaxena.openup
+PackageVersion: 0.1.0
+PackageName: OpenUp
+Publisher: Sehjal Saxena
+License: Unlicense
+ShortDescription: Terminal dashboard and background keeper for campus captive portals
+PackageUrl: https://github.com/sehjalsaxena/openup
+Installers:
+  - Architecture: x64
+    InstallerType: zip
+    InstallerUrl: https://github.com/sehjalsaxena/openup/releases/download/v0.1.0/openup-windows-amd64.zip
+    NestedInstallerType: portable
+    NestedInstallerFiles:
+      - RelativeFilePath: openup.exe
+        PortableCommandAlias: openup
+ManifestType: singleton
+ManifestVersion: 1.6.0

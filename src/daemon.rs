@@ -1,6 +1,7 @@
 use crate::config::{self, Settings};
 use crate::instance::{self, SingleInstanceLock};
 use crate::logger;
+use crate::notify;
 use crate::probe::{self, LoginError, ProbeResult};
 use crate::state::DaemonState;
 use crate::trust::{self, TrustStore, Verdict};
@@ -158,6 +159,7 @@ pub fn run_daemon(
                             force_probe = true;
                             next_allowed_probe_epoch = 0;
                             reconnect_interval = RECONNECT_MIN_TICKS;
+                            notify::notify_wifi_connected(config_dir, &ssids.join(", "));
                         } else {
                             reconnect_interval = (reconnect_interval * 2).min(RECONNECT_MAX_TICKS);
                             reconnect_countdown = reconnect_interval;
@@ -227,6 +229,7 @@ pub fn run_daemon(
                             log(&format!(
                                 "Blocked login: portal host {host} is not trusted (run 'openup portals trust {host}')"
                             ));
+                            notify::notify_portal_blocked(config_dir, &host);
                         }
                         state.last_status_message = format!(
                             "Blocked: portal host {host} is not trusted. Run 'openup portals trust {host}'."
@@ -255,6 +258,7 @@ pub fn run_daemon(
                                     format!("Authenticated at {gateway_base}");
                                 next_allowed_probe_epoch = 0;
                                 log(&format!("Login verified at {gateway_base}"));
+                                notify::notify_login_success(config_dir, &cur_user, &gateway_base);
                                 save_state(&state);
                                 if can_save_state {
                                     let _ = std::fs::write(&cached_gw_path, &login_xml_url);
@@ -266,6 +270,7 @@ pub fn run_daemon(
                                 state.last_status_message =
                                     format!("Halted (bad credentials): {msg}");
                                 log(&format!("Halted: {msg}"));
+                                notify::notify_login_failed(config_dir, &msg);
                                 save_state(&state);
                             }
                             Err(LoginError::StillLocked) => {
@@ -276,6 +281,10 @@ pub fn run_daemon(
                                     state.last_status_message = format!(
                                         "Halted: the portal accepted the login {} times but the internet stayed locked. Check your credentials with 'openup creds'.",
                                         state.still_locked_streak
+                                    );
+                                    notify::notify_circuit_breaker(
+                                        config_dir,
+                                        state.still_locked_streak,
                                     );
                                 } else {
                                     state.last_status_message = format!(

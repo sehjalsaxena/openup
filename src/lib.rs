@@ -4,6 +4,7 @@ pub mod connect;
 pub mod daemon;
 pub mod instance;
 pub mod logger;
+pub mod notify;
 pub mod probe;
 pub mod state;
 pub mod trust;
