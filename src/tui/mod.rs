@@ -51,7 +51,6 @@ fn event_loop(terminal: &mut DefaultTerminal, dir: &Path) -> io::Result<()> {
 
         if event::poll(TICK)?
             && let Event::Key(key) = event::read()?
-            // Windows reports key *release* events too; only act on presses.
             && key.kind == KeyEventKind::Press
         {
             let cmd = app.on_key(key);
@@ -155,7 +154,6 @@ fn execute(
         Command::SaveCreds { username, password } => {
             match config::save_credentials(dir, &username, &password) {
                 Ok(()) => {
-                    // A new password resumes a keeper that had paused itself.
                     DaemonState::reset_circuit_breaker(&dir.join("state.json"));
                     app.toast(ToastKind::Good, "Login saved.");
                 }
@@ -196,7 +194,6 @@ fn start_sign_in(app: &mut App, dir: &Path, tx: &Sender<Msg>) {
             &|m| {
                 let _ = progress_tx.send(Msg::Progress(m.to_string()));
             },
-            // The dashboard asks with its own dialog instead of a terminal prompt.
             &|_| false,
         );
         let _ = tx.send(Msg::OpenDone(result));

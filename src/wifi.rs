@@ -19,10 +19,6 @@ pub fn wait_for_ipv4(timeout: Duration, poll_interval: Duration) -> Option<Ipv4A
     None
 }
 
-// ---------------------------------------------------------------------------
-// Pure parsing / selection (platform independent, unit-tested everywhere)
-// ---------------------------------------------------------------------------
-
 /// Profile names from `netsh wlan show profiles`.
 pub fn parse_wlan_profiles(profiles_output: &str) -> Vec<String> {
     let mut profiles = Vec::new();
@@ -82,10 +78,6 @@ pub fn pick_allowed_profile(
         }
     })
 }
-
-// ---------------------------------------------------------------------------
-// Platform glue. Returns `true` if a connect command reported success.
-// ---------------------------------------------------------------------------
 
 #[cfg(target_os = "windows")]
 use std::os::windows::process::CommandExt;
@@ -247,7 +239,6 @@ SSID 2 : Random_Cafe
     #[test]
     fn only_picks_allowed_networks_that_are_in_range() {
         let allow = allowed(&["Campus_Hostel_Net", "College_Classroom_WiFi"]);
-        // At college the hostel network is out of range -> the classroom one is chosen.
         assert_eq!(
             pick_allowed_profile(PROFILES, Some(NETWORKS_AT_COLLEGE), &allow).as_deref(),
             Some("College_Classroom_WiFi")
@@ -256,8 +247,6 @@ SSID 2 : Random_Cafe
 
     #[test]
     fn never_picks_a_network_the_user_did_not_allow() {
-        // "Guest_WiFi" and "Home_Network" match old keyword heuristics ("wifi"), but
-        // were never allowed, so nothing is chosen.
         let allow = allowed(&["Some_Other_SSID"]);
         assert_eq!(
             pick_allowed_profile(PROFILES, Some(NETWORKS_AT_COLLEGE), &allow),

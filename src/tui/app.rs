@@ -601,7 +601,6 @@ mod tests {
         assert_eq!(app.on_key(ch('x')), Command::None);
         assert!(matches!(app.modal, Modal::Confirm { .. }));
 
-        // Anything but 'y' cancels.
         assert_eq!(app.on_key(key(KeyCode::Enter)), Command::None);
         assert_eq!(app.modal, Modal::None);
 
@@ -655,7 +654,6 @@ mod tests {
         };
         assert_eq!(app.blocked_host(), None);
 
-        // The keeper's blocked-host note is ignored once that host is trusted.
         app.net = NetState::Online;
         app.snap.state.pending_untrusted_gateway = Some("10.0.0.1".into());
         assert_eq!(app.blocked_host(), None);

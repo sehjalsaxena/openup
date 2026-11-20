@@ -13,7 +13,6 @@ use std::sync::Arc;
 use std::sync::Mutex;
 use std::sync::atomic::{AtomicBool, Ordering};
 
-// open_now reads OPENUP_PROBE_URL from the process environment.
 static ENV_LOCK: Mutex<()> = Mutex::new(());
 
 fn with_probe_url<T>(url: &str, f: impl FnOnce() -> T) -> T {
@@ -138,12 +137,10 @@ fn bad_credentials_pause_everything_and_stop_further_attempts() {
     assert!(DaemonState::load(&dir.join("state.json")).halted_bad_credentials);
     assert_eq!(portal.count("POST"), 1);
 
-    // A second try must not touch the portal again (account-lockout protection).
     let (second, _) = open(&dir, &portal.probe_url(), false);
     assert_eq!(second, Err(OpenError::Paused));
     assert_eq!(portal.count("POST"), 1);
 
-    // Saving new credentials resumes it.
     DaemonState::reset_circuit_breaker(&dir.join("state.json"));
     assert!(!DaemonState::load(&dir.join("state.json")).halted_bad_credentials);
 }

@@ -1,5 +1,4 @@
-//! Everything that carries the project's name lives here, so renaming the project
-//! again is a one-file change (plus `Cargo.toml`, the installers and the workflows).
+//! Project branding and name constants.
 
 pub const APP_NAME: &str = "openup";
 pub const DISPLAY_NAME: &str = "OpenUp";

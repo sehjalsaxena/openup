@@ -248,7 +248,6 @@ fn the_whole_trust_then_sign_in_story_through_the_cli() {
     });
     let d = dir("cli_story");
 
-    // 1. Not trusted yet, and no terminal to ask on: refuse, and send nothing.
     let o = openup(&d, &portal.probe_url(), &["now"]);
     assert!(!o.status.success());
     assert!(
@@ -258,24 +257,20 @@ fn the_whole_trust_then_sign_in_story_through_the_cli() {
     );
     assert_eq!(portal.count("POST"), 0);
 
-    // 2. The user approves it explicitly.
     assert!(
         openup(&d, &portal.probe_url(), &["portals", "trust", "127.0.0.1"])
             .status
             .success()
     );
 
-    // 3. Now it signs in and says so.
     let o = openup(&d, &portal.probe_url(), &["now"]);
     assert!(o.status.success(), "{} {}", out(&o), err(&o));
     assert!(out(&o).contains("Signed in"), "{}", out(&o));
     assert_eq!(portal.count("POST"), 1);
 
-    // 4. Running it again is a no-op.
     let o = openup(&d, &portal.probe_url(), &["now"]);
     assert!(out(&o).contains("Already online"), "{}", out(&o));
     assert_eq!(portal.count("POST"), 1);
 
-    // 5. It was recorded in the log.
     assert!(out(&openup(&d, &portal.probe_url(), &["log"])).contains("Signed in via"));
 }

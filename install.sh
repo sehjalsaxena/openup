@@ -3,7 +3,6 @@ set -e
 
 REPO="${OPENUP_REPO:-sehjalsaxena/openup}"
 
-# Detect Operating System (macOS, Linux, WSL)
 OS="$(uname -s)"
 case "$OS" in
   Linux)
@@ -18,7 +17,6 @@ case "$OS" in
     ;;
 esac
 
-# Detect Architecture
 ARCH="$(uname -m)"
 case "$ARCH" in
   x86_64|amd64)
@@ -35,7 +33,6 @@ esac
 
 ASSET_NAME="openup-${OS}-${ARCH}.tar.gz"
 
-# OPENUP_DOWNLOAD_BASE lets you install from a mirror (or a local server when testing).
 if [ -n "$OPENUP_DOWNLOAD_BASE" ]; then
   DOWNLOAD_URL="${OPENUP_DOWNLOAD_BASE%/}/${ASSET_NAME}"
 elif [ -n "$OPENUP_VERSION" ]; then
@@ -44,7 +41,6 @@ else
   DOWNLOAD_URL="https://github.com/${REPO}/releases/latest/download/${ASSET_NAME}"
 fi
 
-# Determine install location (default: ~/.local/bin)
 INSTALL_DIR="${INSTALL_DIR:-$HOME/.local/bin}"
 
 echo "==> Installing openup (${OS}/${ARCH})..."
@@ -59,9 +55,6 @@ if ! curl -fSL "$DOWNLOAD_URL" -o "$TMP_DIR/$ASSET_NAME"; then
   exit 1
 fi
 
-# Verify the download against the SHA-256 published next to it. This catches corrupted or
-# truncated downloads and a tampered CDN/mirror; it cannot protect against a compromised
-# GitHub account, since the checksum comes from the same release.
 sha256_of() {
   if command -v sha256sum >/dev/null 2>&1; then
     sha256sum "$1" | cut -d ' ' -f 1
@@ -103,7 +96,6 @@ chmod +x "$INSTALL_DIR/openup"
 
 echo "✅ openup installed to $INSTALL_DIR/openup"
 
-# Check if INSTALL_DIR is in PATH
 case ":$PATH:" in
   *":$INSTALL_DIR:"*) ;;
   *)

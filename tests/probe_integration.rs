@@ -120,7 +120,6 @@ fn test_e2e_firefox_redirect_to_sophos_login_xml() {
     let probe_url_str = format!("http://127.0.0.1:{port}/success.txt");
 
     let handle = std::thread::spawn(move || {
-        // Step 1: Intercept probe with 302 Found redirect
         if let Ok((mut stream1, _)) = listener.accept() {
             let _ = read_full_http_request(&mut stream1);
             let redirect_response = format!(
@@ -130,11 +129,9 @@ fn test_e2e_firefox_redirect_to_sophos_login_xml() {
             let _ = stream1.flush();
         }
 
-        // Step 2: Accept POST /login.xml with special chars in password and return LIVE XML
         if let Ok((mut stream2, _)) = listener.accept() {
             let req_str = read_full_http_request(&mut stream2);
 
-            // Assert that password with & and = was properly URL-encoded
             assert!(
                 req_str.contains("password=Chitkara%26Pass%3D123"),
                 "Expected url-encoded password in POST body. Received request:\n{}",

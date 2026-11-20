@@ -121,7 +121,6 @@ pub fn check(config_dir: &Path, login_url: &str) -> Verdict {
         return Verdict::Trusted;
     }
     let Some(host) = host_of(login_url) else {
-        // Unparseable target: never send credentials to something we can't identify.
         return Verdict::Untrusted {
             host: login_url.to_string(),
         };
@@ -161,7 +160,6 @@ mod tests {
 
     #[test]
     fn host_of_ignores_userinfo_tricks() {
-        // The *real* host here is evil.example, not the trusted-looking prefix.
         assert_eq!(
             host_of("http://172.16.68.6@evil.example/login").as_deref(),
             Some("evil.example")

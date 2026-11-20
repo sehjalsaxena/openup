@@ -87,10 +87,6 @@ fn is_interactive() -> bool {
     io::stdin().is_terminal() && io::stdout().is_terminal()
 }
 
-// ---------------------------------------------------------------------------
-// Prompts
-// ---------------------------------------------------------------------------
-
 fn ask(prompt: &str) -> io::Result<String> {
     print!("{prompt}");
     io::stdout().flush()?;
@@ -107,10 +103,6 @@ fn confirm(question: &str, default_yes: bool) -> bool {
         Err(_) => false,
     }
 }
-
-// ---------------------------------------------------------------------------
-// open / creds / setup
-// ---------------------------------------------------------------------------
 
 fn approve_on_terminal(host: &str) -> bool {
     if !is_interactive() {
@@ -143,7 +135,6 @@ fn prompt_and_save_credentials(dir: &Path) -> CliResult {
     }
 
     config::save_credentials(dir, &username, &password)?;
-    // Resume the keeper if it had halted on bad credentials.
     DaemonState::reset_circuit_breaker(&dir.join("state.json"));
     Ok(())
 }
@@ -167,7 +158,6 @@ fn cmd_setup(dir: &Path) -> CliResult {
     println!("{} setup", brand::DISPLAY_NAME);
     println!("{}\n", brand::TAGLINE);
 
-    // 1. Credentials
     println!("Step 1/4: your campus login");
     match config::load_credentials(dir) {
         Ok(existing) => {
@@ -183,7 +173,6 @@ fn cmd_setup(dir: &Path) -> CliResult {
         }
     }
 
-    // 2. Portal
     println!("\nStep 2/4: your login portal");
     let client = probe::build_fast_client(false)?;
     match probe::probe_network(&client, connect::cached_gateway(dir).as_deref()) {
@@ -209,7 +198,6 @@ fn cmd_setup(dir: &Path) -> CliResult {
         }
     }
 
-    // 3. Wi-Fi
     println!("\nStep 3/4: Wi-Fi (optional)");
     println!("OpenUp can rejoin your campus Wi-Fi by itself, but only networks you list.");
     let answer = ask("Network name(s), comma-separated (blank to skip): ")?;
@@ -222,7 +210,6 @@ fn cmd_setup(dir: &Path) -> CliResult {
         println!("Wi-Fi allow-list: {}", settings.wifi_ssids.join(", "));
     }
 
-    // 4. Keeper
     println!("\nStep 4/4: stay signed in");
     if confirm("Start the keeper now and at every login?", true) {
         daemon::set_autostart(dir, true)?;
@@ -234,10 +221,6 @@ fn cmd_setup(dir: &Path) -> CliResult {
     );
     Ok(())
 }
-
-// ---------------------------------------------------------------------------
-// keeper / startup
-// ---------------------------------------------------------------------------
 
 fn cmd_keeper(dir: &Path, args: &[String]) -> CliResult {
     match args.first().map(String::as_str) {
@@ -256,7 +239,6 @@ fn cmd_keeper(dir: &Path, args: &[String]) -> CliResult {
             let dry_run = args.iter().any(|a| a == "--dry-run");
             if let Err(e) = daemon::run_daemon(dir, &creds.username, &creds.password, once, dry_run)
             {
-                // The keeper's stderr is detached, so leave a trace in the log too.
                 logger::log(dir, &format!("Keeper error: {e}"));
                 return Err(e.into());
             }
@@ -296,10 +278,6 @@ fn cmd_startup(dir: &Path, args: &[String]) -> CliResult {
         }
     }
 }
-
-// ---------------------------------------------------------------------------
-// portals / wifi / log
-// ---------------------------------------------------------------------------
 
 fn print_portals(dir: &Path, store: &TrustStore) {
     let hosts = store.hosts();
@@ -446,10 +424,6 @@ fn cmd_log(dir: &Path, args: &[String]) -> CliResult {
     Ok(())
 }
 
-// ---------------------------------------------------------------------------
-// doctor
-// ---------------------------------------------------------------------------
-
 #[derive(Clone, Copy)]
 enum Level {
     Ok,
@@ -483,14 +457,12 @@ fn cmd_doctor(dir: &Path) -> CliResult {
         env!("CARGO_PKG_VERSION")
     );
 
-    // Config dir
     report(
         if dir.exists() { Level::Ok } else { Level::Info },
         "Config folder",
         dir.display().to_string(),
     );
 
-    // Credentials
     match config::load_credentials(dir) {
         Ok(c) => report(
             Level::Ok,
@@ -504,7 +476,6 @@ fn cmd_doctor(dir: &Path) -> CliResult {
         ),
     }
 
-    // Keeper
     let lock = dir.join("daemon.lock");
     if instance::is_daemon_running(&lock) {
         let pid = instance::read_lock_pid(&lock)
@@ -519,7 +490,6 @@ fn cmd_doctor(dir: &Path) -> CliResult {
         );
     }
 
-    // Circuit breaker
     let state = DaemonState::load(&dir.join("state.json"));
     if state.halted_bad_credentials {
         report(
@@ -531,7 +501,6 @@ fn cmd_doctor(dir: &Path) -> CliResult {
         report(Level::Ok, "Auto-login", "active".to_string());
     }
 
-    // Network + portal
     let store = TrustStore::open(dir);
     match probe::build_fast_client(false) {
         Err(e) => report(Level::Fail, "Network probe", e.to_string()),

@@ -25,17 +25,12 @@ pub fn config_dir() -> PathBuf {
         .unwrap_or_else(|| PathBuf::from(".config").join(brand::APP_NAME))
 }
 
-// ---------------------------------------------------------------------------
-// Credentials
-// ---------------------------------------------------------------------------
-
 #[derive(Clone, PartialEq, Eq)]
 pub struct Credentials {
     pub username: String,
     pub password: String,
 }
 
-// Never print the password, even by accident (`{:?}` in an error path).
 impl fmt::Debug for Credentials {
     fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
         f.debug_struct("Credentials")
@@ -103,7 +98,6 @@ pub fn create_private_dir(dir: &Path) -> io::Result<()> {
     #[cfg(unix)]
     {
         use std::os::unix::fs::PermissionsExt;
-        // Best effort: the directory may be shared with something we don't own.
         let _ = fs::set_permissions(dir, fs::Permissions::from_mode(0o700));
     }
     Ok(())
@@ -136,10 +130,6 @@ pub fn write_private(path: &Path, bytes: &[u8]) -> io::Result<()> {
     }
     result
 }
-
-// ---------------------------------------------------------------------------
-// Settings
-// ---------------------------------------------------------------------------
 
 /// User-editable settings, stored as `settings.json`. Unknown/missing fields fall
 /// back to defaults so the file stays forward and backward compatible.
@@ -209,7 +199,6 @@ mod tests {
         assert!(parse_credentials("\nsecret\n").is_none());
         assert!(parse_credentials("alice\n   \n").is_none());
         assert!(parse_credentials("").is_none());
-        // Windows line endings
         assert_eq!(parse_credentials("a\r\nb\r\n").unwrap().password, "b");
     }
 

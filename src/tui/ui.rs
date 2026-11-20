@@ -128,7 +128,6 @@ fn render_header(f: &mut Frame, area: Rect, app: &App) {
 fn render_status(f: &mut Frame, area: Rect, app: &App) {
     let s = &app.snap;
     let st = &s.state;
-    // Width left for a value after the 2 border columns and the 12-column label.
     let avail = area.width.saturating_sub(2 + 12) as usize;
 
     let internet = match &app.net {
@@ -344,7 +343,6 @@ fn render_toast(f: &mut Frame, area: Rect, app: &App) {
 }
 
 fn render_footer(f: &mut Frame, area: Rect) {
-    // Optional hints, most useful first. "? help" and "q quit" are always shown.
     let optional = [
         ("o", "sign in"),
         ("k", "keeper"),
@@ -379,10 +377,6 @@ fn render_footer(f: &mut Frame, area: Rect) {
     }
     f.render_widget(Paragraph::new(Line::from(spans)), area);
 }
-
-// ---------------------------------------------------------------------------
-// Dialogs
-// ---------------------------------------------------------------------------
 
 fn centered(area: Rect, width: u16, height: u16) -> Rect {
     let w = width.min(area.width);

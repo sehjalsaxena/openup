@@ -105,7 +105,6 @@ fn test_integration_daemon_once_dry_run() {
         std::env::temp_dir().join(format!("openup_test_int_daemon_{}", std::process::id()));
     let _ = std::fs::create_dir_all(&tmp_dir);
 
-    // Run daemon in once & dry_run mode
     let res = run_daemon(&tmp_dir, "testuser", "testpassword", true, true);
     assert!(res.is_ok(), "daemon once dry_run should succeed: {:?}", res);
 
@@ -124,7 +123,6 @@ fn test_integration_daemon_circuit_breaker_on_bad_password() {
     let probe_url_str = format!("http://127.0.0.1:{port}/probe");
 
     let handle = std::thread::spawn(move || {
-        // Step 1: Probe request -> 302 Found redirect to /login.xml
         if let Ok((mut stream1, _)) = listener.accept() {
             let _ = read_full_http_request(&mut stream1);
             let redirect_response = format!(
@@ -134,7 +132,6 @@ fn test_integration_daemon_circuit_breaker_on_bad_password() {
             let _ = stream1.flush();
         }
 
-        // Step 2: Accept POST /login.xml and reply with Sophos failure XML
         if let Ok((mut stream2, _)) = listener.accept() {
             let _ = read_full_http_request(&mut stream2);
             let xml_body = "<requestresponse><status><![CDATA[FAIL]]></status><message><![CDATA[Make sure your password is correct]]></message></requestresponse>";
@@ -153,7 +150,6 @@ fn test_integration_daemon_circuit_breaker_on_bad_password() {
         std::process::id()
     ));
     let _ = std::fs::create_dir_all(&tmp_dir);
-    // Credentials may only go to trusted portals; the mock portal listens on 127.0.0.1.
     openup::trust::TrustStore::open(&tmp_dir)
         .add("127.0.0.1")
         .unwrap();
@@ -198,7 +194,6 @@ fn test_integration_lock_file_readable_while_held() {
     let lock = acquire(&lock_file).expect("Failed to acquire lock");
     assert!(is_daemon_running(&lock_file));
 
-    // Under Windows share_mode(1) and Unix, readers can open and read the file while the lock is held
     let read_result = std::fs::read_to_string(&lock_file);
     assert!(
         read_result.is_ok(),
@@ -227,7 +222,6 @@ fn test_integration_daemon_live_credential_reload() {
     let probe_url_str = format!("http://127.0.0.1:{port}/probe");
 
     let handle = std::thread::spawn(move || {
-        // Step 1: Probe request -> 302 Found redirect
         if let Ok((mut stream1, _)) = listener.accept() {
             let _ = read_full_http_request(&mut stream1);
             let redirect_response = format!(
@@ -237,7 +231,6 @@ fn test_integration_daemon_live_credential_reload() {
             let _ = stream1.flush();
         }
 
-        // Step 2: Accept POST /login.xml and verify reloaded credentials were used
         if let Ok((mut stream2, _)) = listener.accept() {
             let req_str = read_full_http_request(&mut stream2);
             assert!(
@@ -256,7 +249,6 @@ fn test_integration_daemon_live_credential_reload() {
             let _ = stream2.flush();
         }
 
-        // Step 3: after a "successful" login the daemon re-probes to prove the internet is up
         if let Ok((mut stream3, _)) = listener.accept() {
             let _ = read_full_http_request(&mut stream3);
             let _ = stream3.write_all(
@@ -269,19 +261,16 @@ fn test_integration_daemon_live_credential_reload() {
     let tmp_dir =
         std::env::temp_dir().join(format!("openup_test_live_creds_{}", std::process::id()));
     let _ = std::fs::create_dir_all(&tmp_dir);
-    // Credentials may only go to trusted portals; the mock portal listens on 127.0.0.1.
     openup::trust::TrustStore::open(&tmp_dir)
         .add("127.0.0.1")
         .unwrap();
 
-    // Write updated credentials.txt to config_dir
     let creds_path = tmp_dir.join("credentials.txt");
     std::fs::write(&creds_path, "fresh_user\nfresh_pass\n").unwrap();
 
     unsafe {
         std::env::set_var("OPENUP_PROBE_URL", &probe_url_str);
     }
-    // Pass old credentials into run_daemon, verify it picks up fresh credentials from credentials.txt
     let res = run_daemon(&tmp_dir, "stale_user", "stale_pass", true, false);
     unsafe {
         std::env::remove_var("OPENUP_PROBE_URL");
@@ -307,7 +296,6 @@ fn test_integration_daemon_expanded_circuit_breaker_keywords() {
     let probe_url_str = format!("http://127.0.0.1:{port}/probe");
 
     let handle = std::thread::spawn(move || {
-        // Step 1: Probe request -> 302 Found redirect
         if let Ok((mut stream1, _)) = listener.accept() {
             let _ = read_full_http_request(&mut stream1);
             let redirect_response = format!(
@@ -317,7 +305,6 @@ fn test_integration_daemon_expanded_circuit_breaker_keywords() {
             let _ = stream1.flush();
         }
 
-        // Step 2: Sophos failure XML with "Account expired"
         if let Ok((mut stream2, _)) = listener.accept() {
             let _ = read_full_http_request(&mut stream2);
             let xml_body = "<requestresponse><status><![CDATA[FAIL]]></status><message><![CDATA[Your account expired on 2026-11-01]]></message></requestresponse>";
@@ -334,7 +321,6 @@ fn test_integration_daemon_expanded_circuit_breaker_keywords() {
     let tmp_dir =
         std::env::temp_dir().join(format!("openup_test_exp_breaker_{}", std::process::id()));
     let _ = std::fs::create_dir_all(&tmp_dir);
-    // Credentials may only go to trusted portals; the mock portal listens on 127.0.0.1.
     openup::trust::TrustStore::open(&tmp_dir)
         .add("127.0.0.1")
         .unwrap();

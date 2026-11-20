@@ -1,4 +1,3 @@
-# Windows PowerShell installation script for openup
 [CmdletBinding()]
 param(
     [string]$Version = $env:OPENUP_VERSION,
@@ -11,7 +10,6 @@ $ErrorActionPreference = 'Stop'
 $BinaryName = "openup.exe"
 $AssetName = "openup-windows-amd64.zip"
 
-# OPENUP_DOWNLOAD_BASE lets you install from a mirror (or a local server when testing).
 if ($env:OPENUP_DOWNLOAD_BASE) {
     $DownloadUrl = $env:OPENUP_DOWNLOAD_BASE.TrimEnd('/') + "/$AssetName"
 } elseif ($Version) {
@@ -28,7 +26,6 @@ New-Item -ItemType Directory -Path $TempDir -Force | Out-Null
 $ArchiveFile = Join-Path $TempDir $AssetName
 
 try {
-    # Ensure TLS 1.2 and TLS 1.3 are enabled
     [Net.ServicePointManager]::SecurityProtocol = [Net.SecurityProtocolType]::Tls12 -bor [Net.SecurityProtocolType]::Tls13
 
     Invoke-WebRequest -Uri $DownloadUrl -OutFile $ArchiveFile -UseBasicParsing
@@ -38,9 +35,6 @@ try {
         exit 1
     }
 
-    # Verify the download against the SHA-256 published next to it. This catches corrupted
-    # or tampered downloads; it cannot protect against a compromised GitHub account, since
-    # the checksum comes from the same release.
     if ($env:OPENUP_SKIP_VERIFY -eq '1') {
         Write-Host "[WARN] Skipping checksum verification (OPENUP_SKIP_VERIFY=1)." -ForegroundColor Yellow
     } else {
@@ -60,7 +54,6 @@ try {
 
     Expand-Archive -Path $ArchiveFile -DestinationPath $TempDir -Force
 
-    # Locate openup.exe inside extracted files
     $ExtractedExe = Get-ChildItem -Path $TempDir -Filter $BinaryName -Recurse -File | Select-Object -First 1
 
     if (-not $ExtractedExe) {
@@ -77,12 +70,10 @@ try {
 
     Write-Host "[OK] openup installed to $TargetExe" -ForegroundColor Green
 
-    # Always ensure InstallDir is in current session PATH so openup is immediately available
     if (($env:PATH -split ';') -notcontains $InstallDir) {
         $env:PATH = "$InstallDir;$env:PATH"
     }
 
-    # Check and update persistent User PATH
     $UserPath = [Environment]::GetEnvironmentVariable("Path", [EnvironmentVariableTarget]::User)
     $PathParts = ($UserPath -split ';') | Where-Object { $_ -ne '' }
     $NormalizedInstallDir = $InstallDir.TrimEnd('\')

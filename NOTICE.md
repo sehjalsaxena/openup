@@ -36,4 +36,4 @@ The git history of this repository keeps the original commits and their authorsh
 
 ## License status
 
-As of 19 November 2026, neither upstream repository contains a license file. Without one, the inherited portions remain under their authors' default copyright. **Before distributing OpenUp beyond personal use (public releases, packaging, etc.), get the authors' permission or ask them to add a license, then choose OpenUp's license accordingly.** No license has been added here on purpose.
+As of 19 November 2026, neither upstream repository contains a license file. Without one, the inherited portions remain under their authors' default copyright.

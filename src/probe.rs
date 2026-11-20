@@ -68,7 +68,6 @@ pub fn current_local_ipv4() -> Option<Ipv4Addr> {
     let socket = UdpSocket::bind("0.0.0.0:0").ok()?;
     socket.connect("1.1.1.1:80").ok()?;
     match socket.local_addr().ok()?.ip() {
-        // `is_link_local` already covers 169.254.0.0/16 (APIPA "no DHCP" addresses).
         IpAddr::V4(ip) if !ip.is_loopback() && !ip.is_link_local() => Some(ip),
         _ => None,
     }
@@ -119,7 +118,6 @@ pub fn is_gateway_reachable(gateway: &str) -> bool {
             .port()
             .unwrap_or(if parsed.scheme() == "https" { 443 } else { 80 });
 
-        // 1. Direct IP check fast-path (no DNS lookup)
         if let Ok(ip) = host.parse::<IpAddr>() {
             if let IpAddr::V4(gw_ipv4) = ip
                 && let Some(local_ip) = current_local_ipv4()
@@ -132,7 +130,6 @@ pub fn is_gateway_reachable(gateway: &str) -> bool {
             return TcpStream::connect_timeout(&sock_addr, Duration::from_millis(400)).is_ok();
         }
 
-        // 2. Hostname resolution with IPv4 preference
         let addr_str = format!("{}:{}", host, port);
         if let Ok(addrs) = addr_str.to_socket_addrs() {
             let mut sorted_addrs: Vec<std::net::SocketAddr> = addrs.collect();
@@ -164,9 +161,6 @@ fn client_builder(
         .local_address(IpAddr::V4(Ipv4Addr::UNSPECIFIED)) // Force IPv4 (no AAAA timeout)
         .tcp_nodelay(true)
         .pool_max_idle_per_host(0) // Matches Firefox LOAD_FRESH_CONNECTION
-        // Campus portals use self-signed certificates. Credentials are only ever sent
-        // to hosts in the trust list (see `trust`), which limits the exposure to an
-        // on-path attacker impersonating a gateway you already trust.
         .danger_accept_invalid_certs(true)
         .redirect(if follow_redirects {
             Policy::limited(3)
@@ -307,7 +301,6 @@ pub fn resolve_login_target(raw_redirect_or_html: &str) -> Option<(String, Strin
         return None;
     }
 
-    // 1. Direct URL parse attempt
     if let Ok(parsed) = url::Url::parse(text)
         && (parsed.scheme() == "http" || parsed.scheme() == "https")
         && is_valid_portal_target(&parsed)
@@ -315,7 +308,6 @@ pub fn resolve_login_target(raw_redirect_or_html: &str) -> Option<(String, Strin
         return Some(determine_login_target(&parsed, text));
     }
 
-    // 2. Scan for URLs inside HTML redirect/form constructs
     let mut candidates = Vec::new();
 
     for caps in META_REFRESH_RE.captures_iter(text) {
@@ -378,7 +370,6 @@ pub fn resolve_login_target(raw_redirect_or_html: &str) -> Option<(String, Strin
         }
     }
 
-    // 3. Fallback: Host[:port] without scheme (e.g. "172.16.68.6:8090" or "10.1.1.9:8090/login")
     let host_part = text.split(&['/', ':', '?', '#'][..]).next().unwrap_or("");
     if host_part == "localhost" || host_part.parse::<Ipv4Addr>().is_ok() {
         let with_scheme = format!("http://{}", text);
@@ -409,8 +400,6 @@ fn determine_login_target(parsed: &url::Url, raw_str: &str) -> (String, String) 
     let login_url = if is_sophos_landing {
         format!("{}/login.xml", gateway_base.trim_end_matches('/'))
     } else {
-        // For ALL non-Sophos portals (including root path http://172.16.1.1/ or /php/uid.php?...),
-        // preserve the exact full redirect URL
         raw_str.to_string()
     };
 
@@ -465,11 +454,7 @@ pub fn probe_url(client: &Client, url: &str, fallback_gateway: Option<&str>) -> 
         Err(primary_err) => ProbeResult::ProbeTimeoutOrError(primary_err.to_string()),
     };
 
-    // When url == FIREFOX_SUCCESS_URL, if req.send() fails OR if parse_probe_response returns
-    // ProbeResult::ProbeTimeoutOrError(_) (e.g. unrecognized 403/502 response without a redirect),
-    // automatically try GSTATIC_204_URL and then MSFT_CONNECTTEST_URL before fallback_gateway!
     if url == FIREFOX_SUCCESS_URL && matches!(probe_result, ProbeResult::ProbeTimeoutOrError(_)) {
-        // 1. Try GSTATIC_204_URL
         if let Ok(resp) = send_probe_request(client, GSTATIC_204_URL) {
             let res2 = parse_probe_response(resp);
             if !matches!(res2, ProbeResult::ProbeTimeoutOrError(_)) {
@@ -477,7 +462,6 @@ pub fn probe_url(client: &Client, url: &str, fallback_gateway: Option<&str>) -> 
             }
         }
 
-        // 2. Try MSFT_CONNECTTEST_URL
         if let Ok(resp) = send_probe_request(client, MSFT_CONNECTTEST_URL) {
             let res3 = parse_probe_response(resp);
             if !matches!(res3, ProbeResult::ProbeTimeoutOrError(_)) {
@@ -496,7 +480,6 @@ pub fn probe_url(client: &Client, url: &str, fallback_gateway: Option<&str>) -> 
 fn parse_probe_response(resp: reqwest::blocking::Response) -> ProbeResult {
     let status = resp.status();
 
-    // HTTP 204 No Content indicates Internet is unlocked
     if status.as_u16() == 204 {
         return ProbeResult::OnlineUnlocked;
     }
@@ -580,7 +563,6 @@ pub fn validate_portal_response(status_code: u16, body: &str) -> Result<String, 
     let body_lower = body.to_lowercase();
     let extracted_msg = extract_xml_message(body);
 
-    // 1. Explicit XML status failure checks
     if body_lower.contains("<status>fail</status>")
         || body_lower.contains("[cdata[fail]]")
         || body_lower.contains("<status>login</status>")
@@ -590,7 +572,6 @@ pub fn validate_portal_response(status_code: u16, body: &str) -> Result<String, 
         return Err(format!("Portal rejected login: {}", msg));
     }
 
-    // 2. Failure keywords check (checked BEFORE success keywords)
     let failure_keywords = [
         "invalid username",
         "invalid user name",
@@ -622,19 +603,16 @@ pub fn validate_portal_response(status_code: u16, body: &str) -> Result<String, 
         || body_lower.contains("you are signed in")
         || body_lower.contains("successfully logged in");
 
-    // If XML message exists but body does not contain success keyword, treat as error
     if let Some(msg) = &extracted_msg
         && !has_success_keyword
     {
         return Err(format!("Portal rejected login: {}", msg));
     }
 
-    // 3. Success keyword check
     if has_success_keyword {
         return Ok(extracted_msg.unwrap_or_else(|| "Authentication successful".to_string()));
     }
 
-    // 4. Fallback matching main:src/main.rs (HTTP 200 | 301 | 302 | 303 for non-Sophos HTML portals)
     let is_sophos_xml = body_lower.contains("<requestresponse>") || body_lower.contains("<status>");
     if !is_sophos_xml && matches!(status_code, 200 | 301 | 302 | 303) {
         return Ok("Login request completed.".to_string());
@@ -688,7 +666,6 @@ pub fn submit_login_post(
             .form(&params)
             .send()
     } else {
-        // Exact 6 form parameters from main:src/main.rs (Palo Alto / generic)
         let params = [
             ("inputStr", ""),
             ("escapeUser", username),
@@ -978,7 +955,6 @@ mod tests {
 
     #[test]
     fn test_resolve_login_target_palo_alto_vs_sophos() {
-        // Palo Alto style redirect: preserves exact full URL with path and query
         let pa_location = "https://172.16.1.1:6082/php/uid.php?vsys=1&rule=0";
         let pa_result = resolve_login_target(pa_location);
         assert_eq!(
@@ -989,7 +965,6 @@ mod tests {
             ))
         );
 
-        // Sophos style redirect: ends with /httpclient.html, resolves to /login.xml
         let sophos_location =
             "http://172.16.68.6:8090/httpclient.html?u=http://detectportal.firefox.com/success.txt";
         let sophos_result = resolve_login_target(sophos_location);
@@ -1001,7 +976,6 @@ mod tests {
             ))
         );
 
-        // Bare gateway: resolves to /login.xml
         let bare = "http://172.16.68.6:8090";
         let bare_result = resolve_login_target(bare);
         assert_eq!(
@@ -1012,7 +986,6 @@ mod tests {
             ))
         );
 
-        // Non-Sophos root path: preserves "http://172.16.1.1/"
         let root_path = "http://172.16.1.1/";
         let root_result = resolve_login_target(root_path);
         assert_eq!(
@@ -1023,7 +996,6 @@ mod tests {
             ))
         );
 
-        // Sophos port 8090 non-httpclient path resolves to /login.xml
         let sophos_non_client = "http://172.16.68.6:8090/index.html";
         let sophos_non_client_res = resolve_login_target(sophos_non_client);
         assert_eq!(
@@ -1047,21 +1019,18 @@ mod tests {
 
     #[test]
     fn test_extract_gateway_base_variants() {
-        // Meta refresh
         let meta = r#"<meta http-equiv="refresh" content="0; url=http://172.16.68.6:8090/httpclient.html">"#;
         assert_eq!(
             extract_gateway_base(meta),
             Some("http://172.16.68.6:8090".to_string())
         );
 
-        // Single quotes window.location
         let js = "window.location.href='https://192.168.1.1:8090/login';";
         assert_eq!(
             extract_gateway_base(js),
             Some("https://192.168.1.1:8090".to_string())
         );
 
-        // Raw IP without scheme
         let ip_port = "172.16.68.6:8090";
         assert_eq!(
             extract_gateway_base(ip_port),
@@ -1099,15 +1068,12 @@ mod tests {
 
     #[test]
     fn test_validate_portal_response_signed_in_false_positives() {
-        // "You are not signed in" must be rejected
         let body1 = "<html><body>You are not signed in. Please log in.</body></html>";
         assert!(validate_sophos_response(body1).is_err());
 
-        // "Keep me signed in" must be rejected
         let body2 = "<form><input type='checkbox'>Keep me signed in</form>";
         assert!(validate_sophos_response(body2).is_err());
 
-        // "Stay signed in" must be rejected
         let body3 = "<html><body>Stay signed in to this network</body></html>";
         assert!(validate_sophos_response(body3).is_err());
     }
@@ -1136,18 +1102,15 @@ mod tests {
 
     #[test]
     fn test_validate_portal_response_status_codes() {
-        // Fallback for non-Sophos portals: HTTP 200 without failure keywords
         let non_sophos_html =
             "<html><body>Welcome to Palo Alto Networks Captive Portal</body></html>";
         let res = validate_portal_response(200, non_sophos_html);
         assert!(res.is_ok());
         assert_eq!(res.unwrap(), "Login request completed.");
 
-        // HTTP 302 redirect on login success
         let res_302 = validate_portal_response(302, "");
         assert!(res_302.is_ok());
 
-        // HTTP 200 with explicit failure keyword
         let failure_html = "<html><body>Authentication failed. Please try again.</body></html>";
         let res_fail = validate_portal_response(200, failure_html);
         assert!(res_fail.is_err());
@@ -1192,7 +1155,6 @@ mod tests {
             if let Ok((mut stream, _)) = listener.accept() {
                 let request = read_full_http_request(&mut stream);
 
-                // Verify the form payload encodes special characters like & and =
                 assert!(
                     request.contains("password=P%40ss%26word%3D1%2B2%253"),
                     "Request body did not properly url-encode password. Raw request:\n{}",
@@ -1221,7 +1183,6 @@ mod tests {
             if let Ok((mut stream, _)) = listener.accept() {
                 let request = read_full_http_request(&mut stream);
 
-                // Verify exact 6 params from main:src/main.rs (without mode=191)
                 assert!(
                     !request.contains("mode=191"),
                     "Palo Alto target should not contain mode=191"
@@ -1244,7 +1205,6 @@ mod tests {
 
     #[test]
     fn test_resolve_login_target_rejects_external_and_relative_filenames() {
-        // External URLs with login.xml must be rejected
         assert_eq!(
             resolve_login_target("https://evil.example.org/login.xml"),
             None
@@ -1254,7 +1214,6 @@ mod tests {
             None
         );
 
-        // Relative HTML constructs without private IP must be rejected (not converted to http://login.xml)
         assert_eq!(resolve_login_target(r#"<form action="login.xml">"#), None);
         assert_eq!(
             resolve_login_target(r#"<script>window.location="httpclient.html"</script>"#),
@@ -1270,7 +1229,6 @@ mod tests {
     fn test_is_compatible_gateway_subnet() {
         use std::str::FromStr;
 
-        // Campus routed 10.x.x.x
         let loc_10 = Ipv4Addr::from_str("10.20.1.5").unwrap();
         let gw_10 = Ipv4Addr::from_str("10.1.1.9").unwrap();
         assert!(is_compatible_gateway_subnet(
@@ -1280,7 +1238,6 @@ mod tests {
             "/login.xml"
         ));
 
-        // Campus routed 172.16-31
         let loc_172 = Ipv4Addr::from_str("172.18.5.12").unwrap();
         let gw_172 = Ipv4Addr::from_str("172.16.68.6").unwrap();
         assert!(is_compatible_gateway_subnet(
@@ -1290,13 +1247,11 @@ mod tests {
             "/login.xml"
         ));
 
-        // Home 192.168.1.x: generic router without portal port/path must be rejected
         let loc_192 = Ipv4Addr::from_str("192.168.1.50").unwrap();
         let gw_192 = Ipv4Addr::from_str("192.168.1.1").unwrap();
         assert!(!is_compatible_gateway_subnet(gw_192, loc_192, 80, "/"));
         assert!(!is_compatible_gateway_subnet(gw_192, loc_192, 80, ""));
 
-        // Home 192.168.1.x: portal with explicit port 8090 or path is accepted
         assert!(is_compatible_gateway_subnet(
             gw_192,
             loc_192,
@@ -1304,7 +1259,6 @@ mod tests {
             "/login.xml"
         ));
 
-        // Mismatched subnets (e.g. campus 10.x vs home 192.168.x) must be rejected
         assert!(!is_compatible_gateway_subnet(
             gw_192,
             loc_10,

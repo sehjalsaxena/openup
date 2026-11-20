@@ -29,9 +29,6 @@ impl SingleInstanceLock {
     }
 }
 
-// On Windows the file can be deleted once the handle closes. On Unix it must NOT be:
-// unlinking a lock file another process is about to open lets two daemons each lock a
-// different inode.
 #[cfg(target_os = "windows")]
 impl Drop for SingleInstanceLock {
     fn drop(&mut self) {
@@ -39,16 +36,10 @@ impl Drop for SingleInstanceLock {
     }
 }
 
-// ---------------------------------------------------------------------------
-// Windows
-// ---------------------------------------------------------------------------
-
 #[cfg(target_os = "windows")]
 fn open_exclusive(lock_path: &Path) -> std::io::Result<File> {
     use std::os::windows::fs::OpenOptionsExt;
 
-    // share_mode(1) grants FILE_SHARE_READ but denies FILE_SHARE_WRITE.
-    // Any second writer fails with ERROR_SHARING_VIOLATION (32), while readers can read the PID!
     std::fs::OpenOptions::new()
         .read(true)
         .write(true)
@@ -97,8 +88,6 @@ pub fn is_daemon_running(lock_path: &Path) -> bool {
         return false;
     }
 
-    // Attempt to open with write access and share_mode(3) (FILE_SHARE_READ | FILE_SHARE_WRITE).
-    // If the daemon holds share_mode(1), write access is denied with ERROR_SHARING_VIOLATION (32).
     match std::fs::OpenOptions::new()
         .write(true)
         .share_mode(3)
@@ -109,10 +98,6 @@ pub fn is_daemon_running(lock_path: &Path) -> bool {
     }
 }
 
-// ---------------------------------------------------------------------------
-// Unix (Linux, macOS, ...)
-// ---------------------------------------------------------------------------
-
 #[cfg(not(target_os = "windows"))]
 pub fn acquire(lock_path: &Path) -> Result<SingleInstanceLock, String> {
     use std::fs::TryLockError;
@@ -121,8 +106,6 @@ pub fn acquire(lock_path: &Path) -> Result<SingleInstanceLock, String> {
         let _ = std::fs::create_dir_all(parent);
     }
 
-    // No truncate on open: truncating before we hold the lock would wipe the PID of the
-    // daemon that is actually running.
     let mut file = std::fs::OpenOptions::new()
         .read(true)
         .write(true)
@@ -163,7 +146,6 @@ pub fn is_daemon_running(lock_path: &Path) -> bool {
         return false;
     };
     match file.try_lock_shared() {
-        // Nobody holds the exclusive lock -> no daemon (release our probe lock again).
         Ok(()) => {
             let _ = file.unlock();
             false
@@ -234,7 +216,6 @@ mod tests {
     #[cfg(unix)]
     #[test]
     fn a_leftover_lock_file_does_not_look_like_a_running_daemon() {
-        // Simulates a crashed daemon: file with a PID in it, but no process holds the lock.
         let dir = tmp("stale");
         let lock_file = dir.join("daemon.lock");
         std::fs::write(&lock_file, "1\n").unwrap(); // PID 1 is alive, but irrelevant
@@ -246,7 +227,6 @@ mod tests {
     #[cfg(unix)]
     #[test]
     fn status_checks_do_not_make_a_starting_daemon_lose() {
-        // Hammer is_daemon_running from another thread while acquiring.
         let dir = tmp("race");
         let lock_file = dir.join("daemon.lock");
         let stop = std::sync::Arc::new(std::sync::atomic::AtomicBool::new(false));

@@ -51,8 +51,6 @@ impl DaemonState {
             file.sync_all()?;
         }
 
-        // Rust's std::fs::rename on Windows uses MoveFileExW with MOVEFILE_REPLACE_EXISTING.
-        // Fall back to remove_file + rename only if direct rename fails.
         std::fs::rename(&tmp_path, path).or_else(|_| {
             let _ = std::fs::remove_file(path);
             std::fs::rename(&tmp_path, path)
@@ -143,15 +141,12 @@ mod tests {
             pending_untrusted_gateway: Some("10.9.9.9".to_string()),
         };
 
-        // Save
         assert!(state.save_atomic(&state_path).is_ok());
         assert!(state_path.exists());
 
-        // Load
         let loaded = DaemonState::load(&state_path);
         assert_eq!(loaded, state);
 
-        // Reset circuit breaker
         DaemonState::reset_circuit_breaker(&state_path);
         let after_reset = DaemonState::load(&state_path);
         assert!(!after_reset.halted_bad_credentials);

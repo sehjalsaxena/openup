@@ -61,7 +61,6 @@ pub fn run_daemon(
     let lock_path = config_dir.join("daemon.lock");
     let state_path = config_dir.join("state.json");
 
-    // Skip kernel instance lock only when running a one-shot dry-run check
     let _lock = if once && dry_run {
         None
     } else {
@@ -119,14 +118,12 @@ pub fn run_daemon(
         let mut force_probe = once || first_tick;
         first_tick = false;
 
-        // Suspend/resume: the wall clock jumped far more than one tick.
         if last_tick_epoch != 0 && now.saturating_sub(last_tick_epoch) > WAKE_GAP_SECS {
             log("Wake from sleep detected; re-checking the network");
             force_probe = true;
             next_allowed_probe_epoch = 0;
         }
 
-        // Live reset of circuit breaker if reset on disk via `openup creds`
         if state.halted_bad_credentials {
             let disk_state = DaemonState::load(&state_path);
             if !disk_state.halted_bad_credentials {
@@ -141,12 +138,10 @@ pub fn run_daemon(
 
         let local_ip = probe::current_local_ipv4();
 
-        // 1. Fast Roaming Check (<0.1ms, zero packets)
         match local_ip {
             None => {
                 state.last_local_ip = None;
                 reconnect_countdown = reconnect_countdown.saturating_sub(1);
-                // Only ever touches Wi-Fi networks the user allowed (`openup wifi add`).
                 if reconnect_countdown == 0 {
                     reconnect_countdown = reconnect_interval;
                     let ssids = Settings::load(config_dir).wifi_ssids;
@@ -175,7 +170,6 @@ pub fn run_daemon(
                 reconnect_interval = RECONNECT_MIN_TICKS;
                 let ip_str = ip.to_string();
                 if state.last_local_ip.as_deref() != Some(&ip_str) {
-                    // Subnet Roam / Wake-from-Sleep Detected!
                     log(&format!(
                         "Network change: {} -> {ip_str}",
                         state.last_local_ip.as_deref().unwrap_or("none")
@@ -187,7 +181,6 @@ pub fn run_daemon(
             }
         }
 
-        // 2. Portal Probe (when forced, or every 30s after backoff has elapsed)
         let probe_due =
             now >= next_allowed_probe_epoch && now.saturating_sub(state.last_probe_epoch) >= 30;
         if force_probe || probe_due {
@@ -224,14 +217,12 @@ pub fn run_daemon(
                             return Ok(());
                         }
                     } else if state.halted_bad_credentials {
-                        // Circuit breaker engaged: prevent campus account lockouts
                         state.last_status_message =
                             "Halted due to bad credentials. Run 'openup creds'.".to_string();
                         save_state(&state);
                     } else if let Verdict::Untrusted { host } =
                         trust::check(config_dir, &login_xml_url)
                     {
-                        // Never send credentials to a portal the user hasn't approved.
                         if state.pending_untrusted_gateway.as_deref() != Some(&host) {
                             log(&format!(
                                 "Blocked login: portal host {host} is not trusted (run 'openup portals trust {host}')"
@@ -281,7 +272,6 @@ pub fn run_daemon(
                                 state.still_locked_streak += 1;
                                 state.failure_streak += 1;
                                 if state.still_locked_streak >= MAX_STILL_LOCKED {
-                                    // Re-submitting forever risks a campus lockout.
                                     state.halted_bad_credentials = true;
                                     state.last_status_message = format!(
                                         "Halted: the portal accepted the login {} times but the internet stayed locked. Check your credentials with 'openup creds'.",
@@ -353,7 +343,6 @@ pub fn start_background_daemon(config_dir: &Path) -> Result<String, String> {
         .spawn()
         .map_err(|e| format!("Failed to spawn the keeper: {e}"))?;
 
-    // Poll every 50ms for up to 2s for the lock (antivirus can slow first launch).
     let mut started = false;
     for _ in 0..40 {
         if instance::is_daemon_running(&lock_path) {
@@ -382,7 +371,6 @@ pub fn stop_daemon(config_dir: &Path) -> Result<String, String> {
         return Ok("The keeper is not running.".to_string());
     }
 
-    // The PID in daemon.lock is authoritative while the lock is held; state.json is the fallback.
     let pid = instance::read_lock_pid(&lock_path)
         .or_else(|| Some(DaemonState::load(&state_path).pid).filter(|p| *p > 0));
 
@@ -406,13 +394,11 @@ pub fn stop_daemon(config_dir: &Path) -> Result<String, String> {
 
     #[cfg(not(target_os = "windows"))]
     {
-        // The flock proves this PID is the live daemon, so it can't be a recycled PID.
         let _ = std::process::Command::new("kill")
             .arg(pid.to_string())
             .output();
     }
 
-    // Poll every 50ms up to 2s for the OS to fully terminate it and release the lock
     for _ in 0..40 {
         if !instance::is_daemon_running(&lock_path) {
             break;

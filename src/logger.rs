@@ -71,7 +71,6 @@ mod tests {
     fn formats_known_timestamps() {
         assert_eq!(format_utc(0), "1970-01-01 00:00:00Z");
         assert_eq!(format_utc(1_700_000_000), "2023-11-14 22:13:20Z");
-        // Leap day
         assert_eq!(format_utc(1_709_164_800), "2024-02-29 00:00:00Z");
     }
 
@@ -88,7 +87,6 @@ mod tests {
         assert!(lines[0].ends_with("multi line"));
         assert!(lines[1].ends_with("third"));
 
-        // Force a rotation
         fs::write(dir.join(LOG_FILE), vec![b'x'; (MAX_BYTES + 10) as usize]).unwrap();
         log(&dir, "after rotate");
         assert!(dir.join("openup.log.1").exists());

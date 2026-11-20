@@ -154,7 +154,7 @@ cargo clippy --all-targets -- -D warnings
 - `src/tui/`: `app.rs` (pure state and key handling), `ui.rs` (rendering), `mod.rs` (event loop, background threads).
 - `src/daemon.rs`: the keeper loop. `src/probe.rs`: portal detection and login. `src/trust.rs`, `src/config.rs`, `src/wifi.rs`, `src/instance.rs`, `src/logger.rs`, `src/state.rs`.
 - Tests use a small mock captive portal (`tests/common`) and also run the real binary (`tests/cli_integration.rs`).
-- All naming lives in `src/brand.rs`; renaming the project again means that file plus `Cargo.toml`, the installers and the workflows.
+- All naming lives in `src/brand.rs`.
 
 Environment variables: `OPENUP_CONFIG_DIR`, `OPENUP_PROBE_URL` (override the connectivity probe, used by the tests), `OPENUP_TRUST_ANY`. Installers: `OPENUP_VERSION`, `OPENUP_REPO`, `OPENUP_DOWNLOAD_BASE`, `OPENUP_SKIP_VERIFY`, `INSTALL_DIR`.
 
@@ -184,4 +184,4 @@ The git history keeps their original commits. Details are in [NOTICE.md](NOTICE.
 
 ## License
 
-Not chosen yet. The two projects above do not publish a license, so one should be agreed with their authors before OpenUp is distributed widely. See [NOTICE.md](NOTICE.md).
+See [NOTICE.md](NOTICE.md).

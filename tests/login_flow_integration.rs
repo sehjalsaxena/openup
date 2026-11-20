@@ -15,7 +15,6 @@ use std::sync::Mutex;
 use std::sync::atomic::{AtomicBool, Ordering};
 use std::time::Duration;
 
-// run_daemon reads OPENUP_PROBE_URL from the process environment.
 static ENV_LOCK: Mutex<()> = Mutex::new(());
 
 fn with_probe_url<T>(url: &str, f: impl FnOnce() -> T) -> T {
@@ -70,7 +69,6 @@ fn login_is_only_a_success_when_the_internet_really_opens() {
             "p",
         )
     });
-    // Not :8090 -> generic form login at that exact URL; the mock accepts any POST.
     assert!(result.is_ok(), "{result:?}");
     assert_eq!(portal.count("POST"), 1);
 }
@@ -106,7 +104,6 @@ fn bad_credentials_are_a_distinct_error_and_never_verified() {
 
 #[test]
 fn a_dead_portal_is_a_network_error_not_a_credential_error() {
-    // Nothing is listening here.
     let port = {
         let l = std::net::TcpListener::bind("127.0.0.1:0").unwrap();
         l.local_addr().unwrap().port()
@@ -120,7 +117,6 @@ fn a_dead_portal_is_a_network_error_not_a_credential_error() {
 
 #[test]
 fn wait_until_unlocked_tolerates_a_slow_portal() {
-    // Locked for the first two probes, open on the third.
     let hits = Arc::new(std::sync::atomic::AtomicU32::new(0));
     let h = hits.clone();
     let portal = MockPortal::start(move |_, port| {
@@ -195,8 +191,6 @@ fn daemon_halts_instead_of_resubmitting_forever_when_login_never_sticks() {
         DaemonState::load(&state_path)
     };
 
-    // The streak is persisted, so it survives daemon restarts (each pass here is a
-    // fresh process-equivalent: once=true starts from disk state only).
     let s1 = pass(1);
     assert_eq!(s1.still_locked_streak, 1);
     assert!(!s1.halted_bad_credentials);
@@ -212,7 +206,6 @@ fn daemon_halts_instead_of_resubmitting_forever_when_login_never_sticks() {
     assert!(s3.last_status_message.contains("Halted"));
     assert_eq!(s3.total_logins, 0);
 
-    // Once halted, further passes must not touch the portal at all.
     let posts_before = portal.count("POST");
     let s4 = pass(4);
     assert!(s4.halted_bad_credentials);
@@ -223,7 +216,6 @@ fn daemon_halts_instead_of_resubmitting_forever_when_login_never_sticks() {
     );
     assert_eq!(posts_before, 3);
 
-    // `openup creds` (reset) resumes it.
     DaemonState::reset_circuit_breaker(&state_path);
     let after_reset = DaemonState::load(&state_path);
     assert!(!after_reset.halted_bad_credentials);
