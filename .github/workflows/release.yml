@@ -13,6 +13,7 @@ jobs:
   release:
     name: Build & Release (${{ matrix.target }})
     runs-on: ${{ matrix.os }}
+    timeout-minutes: 20
     permissions:
       contents: write # needed to attach assets to the release
     strategy:

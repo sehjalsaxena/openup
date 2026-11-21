@@ -215,10 +215,7 @@ fn probe_once(dir: &Path) -> (NetState, Option<u64>) {
     };
     let start = std::time::Instant::now();
     match probe::probe_network(&client, connect::cached_gateway(dir).as_deref()) {
-        ProbeResult::OnlineUnlocked => (
-            NetState::Online,
-            Some(start.elapsed().as_millis() as u64),
-        ),
+        ProbeResult::OnlineUnlocked => (NetState::Online, Some(start.elapsed().as_millis() as u64)),
         ProbeResult::LockedPortal { login_xml_url, .. } => {
             let trusted = matches!(trust::check(dir, &login_xml_url), Verdict::Trusted);
             let host = trust::host_of(&login_xml_url).unwrap_or(login_xml_url);

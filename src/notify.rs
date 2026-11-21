@@ -99,6 +99,12 @@ pub fn all_sample_notifications() -> Vec<Notification> {
 }
 
 pub fn send_desktop_notification(title: &str, body: &str) {
+    if std::env::var("CI").is_ok()
+        || std::env::var("GITHUB_ACTIONS").is_ok()
+        || std::env::var("OPENUP_NO_NOTIFY").is_ok()
+    {
+        return;
+    }
     let title = title.to_string();
     let body = body.to_string();
     std::thread::spawn(move || {
@@ -112,21 +118,26 @@ fn send_platform(title: &str, body: &str) {
     const CREATE_NO_WINDOW: u32 = 0x0800_0000;
 
     let ps_script = r#"
-        [Windows.UI.Notifications.ToastNotificationManager, Windows.UI.Notifications, ContentType = WindowsRuntime] > $null
-        $template = [Windows.UI.Notifications.ToastNotificationManager]::GetTemplateContent([Windows.UI.Notifications.ToastTemplateType]::ToastText02)
-        $texts = $template.GetElementsByTagName('text')
-        $texts.Item(0).AppendChild($template.CreateTextNode($env:OPENUP_TOAST_TITLE)) > $null
-        $texts.Item(1).AppendChild($template.CreateTextNode($env:OPENUP_TOAST_BODY)) > $null
-        $notifier = [Windows.UI.Notifications.ToastNotificationManager]::CreateToastNotifier('OpenUp')
-        $notifier.Show([Windows.UI.Notifications.ToastNotification]::new($template))
+        try {
+            [Windows.UI.Notifications.ToastNotificationManager, Windows.UI.Notifications, ContentType = WindowsRuntime] > $null
+            $template = [Windows.UI.Notifications.ToastNotificationManager]::GetTemplateContent([Windows.UI.Notifications.ToastTemplateType]::ToastText02)
+            $texts = $template.GetElementsByTagName('text')
+            $texts.Item(0).AppendChild($template.CreateTextNode($env:OPENUP_TOAST_TITLE)) > $null
+            $texts.Item(1).AppendChild($template.CreateTextNode($env:OPENUP_TOAST_BODY)) > $null
+            $notifier = [Windows.UI.Notifications.ToastNotificationManager]::CreateToastNotifier('OpenUp')
+            $notifier.Show([Windows.UI.Notifications.ToastNotification]::new($template))
+        } catch {}
     "#;
 
     let _ = std::process::Command::new("powershell")
         .args(["-NoProfile", "-NonInteractive", "-Command", ps_script])
         .env("OPENUP_TOAST_TITLE", title)
         .env("OPENUP_TOAST_BODY", body)
+        .stdin(std::process::Stdio::null())
+        .stdout(std::process::Stdio::null())
+        .stderr(std::process::Stdio::null())
         .creation_flags(CREATE_NO_WINDOW)
-        .output();
+        .spawn();
 }
 
 #[cfg(target_os = "macos")]
@@ -136,14 +147,20 @@ fn send_platform(title: &str, body: &str) {
     let script = format!(r#"display notification "{safe_body}" with title "{safe_title}""#);
     let _ = std::process::Command::new("osascript")
         .args(["-e", &script])
-        .output();
+        .stdin(std::process::Stdio::null())
+        .stdout(std::process::Stdio::null())
+        .stderr(std::process::Stdio::null())
+        .spawn();
 }
 
 #[cfg(target_os = "linux")]
 fn send_platform(title: &str, body: &str) {
     let _ = std::process::Command::new("notify-send")
         .args(["-a", "OpenUp", title, body])
-        .output();
+        .stdin(std::process::Stdio::null())
+        .stdout(std::process::Stdio::null())
+        .stderr(std::process::Stdio::null())
+        .spawn();
 }
 
 #[cfg(not(any(target_os = "windows", target_os = "macos", target_os = "linux")))]
