@@ -19,6 +19,7 @@ struct SystemPowerStatus {
 }
 
 #[cfg(target_os = "windows")]
+#[link(name = "kernel32")]
 extern "system" {
     fn GetSystemPowerStatus(lpSystemPowerStatus: *mut SystemPowerStatus) -> i32;
 }
