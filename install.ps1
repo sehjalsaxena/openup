@@ -66,7 +66,17 @@ try {
     }
 
     $TargetExe = Join-Path $InstallDir $BinaryName
-    Copy-Item -Path $ExtractedExe.FullName -Destination $TargetExe -Force
+    try {
+        Copy-Item -Path $ExtractedExe.FullName -Destination $TargetExe -Force -ErrorAction Stop
+    } catch {
+        # If openup is currently running, Windows allows renaming but blocks overwriting
+        $OldExe = "$TargetExe.old"
+        if (Test-Path $OldExe) {
+            Remove-Item $OldExe -Force -ErrorAction SilentlyContinue
+        }
+        Move-Item -Path $TargetExe -Destination $OldExe -Force -ErrorAction SilentlyContinue
+        Copy-Item -Path $ExtractedExe.FullName -Destination $TargetExe -Force
+    }
 
     Write-Host "[OK] openup installed to $TargetExe" -ForegroundColor Green
 
