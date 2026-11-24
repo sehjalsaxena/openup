@@ -34,7 +34,7 @@ pub fn render(f: &mut Frame, app: &App) {
         Constraint::Length(1),
     ])
     .areas(area);
-    let [top, log] = Layout::vertical([Constraint::Length(9), Constraint::Min(4)]).areas(body);
+    let [top, log] = Layout::vertical([Constraint::Length(11), Constraint::Min(4)]).areas(body);
     let [status, right] =
         Layout::horizontal([Constraint::Percentage(55), Constraint::Percentage(45)]).areas(top);
     let [portals, wifi] =
@@ -181,14 +181,49 @@ fn render_status(f: &mut Frame, area: Rect, app: &App) {
         String::new()
     };
 
+    let now = std::time::SystemTime::now()
+        .duration_since(std::time::UNIX_EPOCH)
+        .map(|d| d.as_secs())
+        .unwrap_or(0);
+
+    let session_display = if matches!(app.net, NetState::Online) {
+        if let Some(dur_str) = st.session_duration_human(now) {
+            vec![colored(dur_str, Color::Green), dim(" (online)")]
+        } else {
+            vec![colored("just started", Color::Green)]
+        }
+    } else {
+        vec![dim("-")]
+    };
+
+    let power_display = match crate::power::current_power_state() {
+        crate::power::PowerState::Battery => {
+            vec![colored("battery", Color::Yellow), dim(" (saving power)")]
+        }
+        crate::power::PowerState::Ac => vec![colored("AC", Color::Green)],
+        crate::power::PowerState::Unknown => vec![dim("unknown")],
+    };
+
     let account = match &s.username {
         Some(u) => vec![Span::raw(u.clone())],
         None => vec![colored("not saved: press c", Color::Yellow)],
     };
 
-    let lines = vec![
-        kv("Internet", internet),
+    let mut lines = vec![kv("Internet", internet)];
+
+    if !app.ping_history.is_empty() {
+        let spark = app.ping_sparkline();
+        let ping_text = app.ping_ms.map(|m| format!("{m} ms ")).unwrap_or_default();
+        lines.push(kv(
+            "Latency",
+            vec![Span::raw(ping_text), colored(spark, Color::Cyan)],
+        ));
+    }
+
+    lines.extend([
+        kv("Session", session_display),
         kv("Keeper", keeper),
+        kv("Power", power_display),
         kv("Account", account),
         kv(
             "Gateway",
@@ -199,7 +234,14 @@ fn render_status(f: &mut Frame, area: Rect, app: &App) {
         ),
         kv(
             "Logins",
-            vec![Span::raw(st.total_logins.to_string()), dim(last_login)],
+            vec![
+                Span::raw(format!("{} total", st.total_logins)),
+                if st.daily_logins > 0 {
+                    dim(format!(" ({} today)", st.daily_logins))
+                } else {
+                    dim(last_login)
+                },
+            ],
         ),
         kv("Autopilot", breaker),
         kv(
@@ -213,7 +255,7 @@ fn render_status(f: &mut Frame, area: Rect, app: &App) {
                 avail,
             ))],
         ),
-    ];
+    ]);
     f.render_widget(Paragraph::new(lines).block(panel("Status", false)), area);
 }
 

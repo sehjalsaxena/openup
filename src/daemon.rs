@@ -183,8 +183,10 @@ pub fn run_daemon(
             }
         }
 
-        let probe_due =
-            now >= next_allowed_probe_epoch && now.saturating_sub(state.last_probe_epoch) >= 30;
+        let is_battery = crate::power::is_on_battery();
+        let probe_interval: u64 = if is_battery { 60 } else { 30 };
+        let probe_due = now >= next_allowed_probe_epoch
+            && now.saturating_sub(state.last_probe_epoch) >= probe_interval;
         if force_probe || probe_due {
             state.last_probe_epoch = now;
 
@@ -200,6 +202,9 @@ pub fn run_daemon(
                 ProbeResult::OnlineUnlocked => {
                     if state.last_status_message != "Online and unlocked" {
                         log("Online");
+                    }
+                    if state.session_start_epoch.is_none() {
+                        state.session_start_epoch = Some(now);
                     }
                     state.failure_streak = 0;
                     state.still_locked_streak = 0;
@@ -250,7 +255,8 @@ pub fn run_daemon(
                             Ok(_) => {
                                 state.failure_streak = 0;
                                 state.still_locked_streak = 0;
-                                state.total_logins += 1;
+                                state.record_login(now);
+                                state.session_start_epoch = Some(now);
                                 state.last_login_epoch = now;
                                 state.active_gateway = Some(login_xml_url.clone());
                                 state.pending_untrusted_gateway = None;

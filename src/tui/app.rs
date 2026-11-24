@@ -154,6 +154,7 @@ pub struct App {
     /// Set while a background job (sign-in, keeper start/stop) is running.
     pub busy: Option<String>,
     pub ping_ms: Option<u64>,
+    pub ping_history: Vec<u64>,
 }
 
 impl App {
@@ -168,9 +169,28 @@ impl App {
             toast: None,
             busy: None,
             ping_ms: None,
+            ping_history: Vec::new(),
         };
         app.clamp_selection();
         app
+    }
+
+    pub fn ping_sparkline(&self) -> String {
+        if self.ping_history.is_empty() {
+            return String::new();
+        }
+        let bars = [' ', '▂', '▃', '▄', '▅', '▆', '▇', '█'];
+        let max = *self.ping_history.iter().max().unwrap_or(&1).max(&1);
+        let min = *self.ping_history.iter().min().unwrap_or(&0);
+        let range = if max > min { max - min } else { 1 };
+
+        self.ping_history
+            .iter()
+            .map(|&val| {
+                let norm = (val.saturating_sub(min) * 7) / range;
+                bars[norm.min(7) as usize]
+            })
+            .collect()
     }
 
     pub fn set_snapshot(&mut self, snap: Snapshot) {
@@ -224,6 +244,12 @@ impl App {
             Msg::Net(n, ping) => {
                 self.net = n;
                 self.ping_ms = ping;
+                if let Some(ms) = ping {
+                    self.ping_history.push(ms);
+                    if self.ping_history.len() > 30 {
+                        self.ping_history.remove(0);
+                    }
+                }
                 Command::None
             }
             Msg::Progress(text) => {
@@ -780,5 +806,15 @@ mod tests {
         assert_eq!(app.modal, Modal::Help);
         assert_eq!(app.on_key(ch('z')), Command::None);
         assert_eq!(app.modal, Modal::None);
+    }
+
+    #[test]
+    fn ping_sparkline_renders_levels() {
+        let mut app = app_with(&[], &[]);
+        assert_eq!(app.ping_sparkline(), "");
+
+        app.ping_history = vec![10, 20, 50, 100];
+        let spark = app.ping_sparkline();
+        assert_eq!(spark.chars().count(), 4);
     }
 }

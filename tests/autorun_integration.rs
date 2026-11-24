@@ -82,6 +82,7 @@ fn test_integration_state_atomic_and_circuit_breaker() {
         last_status_message: "Halted (bad credentials)".to_string(),
         total_logins: 12,
         pending_untrusted_gateway: None,
+        ..Default::default()
     };
 
     assert!(state.save_atomic(&state_file).is_ok());

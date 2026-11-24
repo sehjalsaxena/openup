@@ -34,6 +34,10 @@ Walk from your hostel to a classroom and your laptop hops to a new access point,
 ## What it does
 
 - **Dashboard.** Run `openup` for a live view: network state, keeper status, trusted portals, Wi-Fi list and an activity log. Sign in, start the keeper, approve a portal or save your login with one key.
+- **Latency Sparkline Graph.** Real-time ping sparkline (` ▂▃▄▅`) directly inside the status panel to monitor Wi-Fi quality and packet jitter.
+- **Battery-Aware Backoff.** Automatically detects battery vs AC power and relaxes background probe frequencies when unplugged, maximizing laptop battery life.
+- **Session & Uptime Tracking.** Tracks your current continuous online duration and counts auto-logins saved today.
+- **System Tray Integration.** Run `openup tray` to dock OpenUp in the taskbar notification tray with live status tooltips and a right-click quick menu.
 - **Keeper.** A background process that notices when you roam or wake from sleep and signs you back in, within seconds.
 - **Verified sign-ins.** A portal page that merely *says* "success" is not enough. OpenUp checks that the internet really works before it counts a login.
 - **Safe by default.** Your password only goes to portals you approved. If the portal rejects it (or says "logged in" but stays locked), OpenUp stops instead of hammering your account into a lockout.

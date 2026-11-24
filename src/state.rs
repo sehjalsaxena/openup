@@ -20,9 +20,41 @@ pub struct DaemonState {
     pub total_logins: u64,
     /// Portal host that was found but not trusted yet (see `openup portals trust`).
     pub pending_untrusted_gateway: Option<String>,
+    /// Epoch timestamp when the current continuous online session started.
+    pub session_start_epoch: Option<u64>,
+    /// Number of successful logins today.
+    pub daily_logins: u64,
+    /// Day index (epoch / 86400) when daily_logins was last updated.
+    pub last_login_day: Option<u32>,
 }
 
 impl DaemonState {
+    pub fn current_session_secs(&self, now: u64) -> Option<u64> {
+        self.session_start_epoch.map(|s| now.saturating_sub(s))
+    }
+
+    pub fn session_duration_human(&self, now: u64) -> Option<String> {
+        self.current_session_secs(now).map(|secs| {
+            let hours = secs / 3600;
+            let mins = (secs % 3600) / 60;
+            if hours > 0 {
+                format!("{hours}h {mins}m")
+            } else {
+                format!("{mins}m")
+            }
+        })
+    }
+
+    pub fn record_login(&mut self, now: u64) {
+        self.total_logins += 1;
+        let day = (now / 86400) as u32;
+        if self.last_login_day != Some(day) {
+            self.daily_logins = 1;
+            self.last_login_day = Some(day);
+        } else {
+            self.daily_logins += 1;
+        }
+    }
     /// Loads the daemon state from a JSON file, or returns default if not found or corrupted
     pub fn load(path: &Path) -> Self {
         if !path.exists() {
@@ -139,6 +171,7 @@ mod tests {
             last_status_message: "Halted".to_string(),
             total_logins: 3,
             pending_untrusted_gateway: Some("10.9.9.9".to_string()),
+            ..Default::default()
         };
 
         assert!(state.save_atomic(&state_path).is_ok());
@@ -158,5 +191,30 @@ mod tests {
         assert_eq!(after_reset.pid, 1234);
 
         let _ = std::fs::remove_dir_all(&tmp_dir);
+    }
+
+    #[test]
+    fn session_duration_and_daily_logins() {
+        let mut s = DaemonState::default();
+        assert!(s.session_duration_human(1000).is_none());
+
+        s.session_start_epoch = Some(1000);
+        assert_eq!(s.session_duration_human(1050), Some("0m".to_string()));
+        assert_eq!(
+            s.session_duration_human(1000 + 3600 + 120),
+            Some("1h 2m".to_string())
+        );
+
+        s.record_login(86400 * 5 + 100);
+        assert_eq!(s.total_logins, 1);
+        assert_eq!(s.daily_logins, 1);
+
+        s.record_login(86400 * 5 + 200);
+        assert_eq!(s.total_logins, 2);
+        assert_eq!(s.daily_logins, 2);
+
+        s.record_login(86400 * 6 + 100);
+        assert_eq!(s.total_logins, 3);
+        assert_eq!(s.daily_logins, 1);
     }
 }

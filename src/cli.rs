@@ -40,6 +40,7 @@ Usage:
   openup wifi list | clear      Show / clear that list (empty = OpenUp never touches Wi-Fi)
 
   openup notify [on|off|test]   Manage or test desktop notifications
+  openup tray                   Run in the desktop notification tray
   openup log [-n N]             Show the last N log lines (default 30)
   openup --version | --help";
 
@@ -70,6 +71,7 @@ pub fn run(args: Vec<String>) -> CliResult {
         Some("portals") => cmd_portals(&dir, rest),
         Some("wifi") => cmd_wifi(&dir, rest),
         Some("notify") => cmd_notify(&dir, rest),
+        Some("tray") => cmd_tray(&dir),
         Some("log") => cmd_log(&dir, rest),
         Some("--version" | "-V" | "version") => {
             println!("{} {}", brand::APP_NAME, env!("CARGO_PKG_VERSION"));
@@ -476,6 +478,10 @@ fn cmd_notify(dir: &Path, args: &[String]) -> CliResult {
         )
         .into()),
     }
+}
+
+fn cmd_tray(dir: &Path) -> CliResult {
+    openup::tray::run_tray(dir).map_err(Into::into)
 }
 
 #[derive(Clone, Copy)]
