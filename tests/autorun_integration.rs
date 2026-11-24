@@ -8,6 +8,7 @@ use std::sync::Mutex;
 static TEST_MUTEX: Mutex<()> = Mutex::new(());
 
 fn read_full_http_request(stream: &mut std::net::TcpStream) -> String {
+    let _ = stream.set_read_timeout(Some(std::time::Duration::from_millis(1500)));
     let mut data = Vec::new();
     let mut buf = [0u8; 1024];
 

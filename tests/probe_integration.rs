@@ -3,6 +3,7 @@ use std::io::{Read, Write};
 use std::net::{TcpListener, TcpStream};
 
 fn read_full_http_request(stream: &mut TcpStream) -> String {
+    let _ = stream.set_read_timeout(Some(std::time::Duration::from_millis(1500)));
     let _ = stream.set_nodelay(true);
     let mut data = Vec::new();
     let mut buf = [0u8; 1024];

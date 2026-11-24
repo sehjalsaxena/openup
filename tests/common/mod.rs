@@ -9,6 +9,7 @@ use std::sync::{Arc, Mutex};
 use std::thread::JoinHandle;
 
 pub fn read_http_request(stream: &mut TcpStream) -> String {
+    let _ = stream.set_read_timeout(Some(std::time::Duration::from_millis(1500)));
     let mut data = Vec::new();
     let mut buf = [0u8; 1024];
     loop {
@@ -62,10 +63,10 @@ impl MockPortal {
         let (stop2, requests2) = (stop.clone(), requests.clone());
         let handle = std::thread::spawn(move || {
             for conn in listener.incoming() {
+                let Ok(mut stream) = conn else { continue };
                 if stop2.load(Ordering::SeqCst) {
                     break;
                 }
-                let Ok(mut stream) = conn else { continue };
                 let req = read_http_request(&mut stream);
                 requests2
                     .lock()
@@ -102,7 +103,11 @@ impl MockPortal {
 impl Drop for MockPortal {
     fn drop(&mut self) {
         self.stop.store(true, Ordering::SeqCst);
-        let _ = TcpStream::connect(("127.0.0.1", self.port)); // wake the accept loop
+        if let Ok(mut s) = TcpStream::connect(("127.0.0.1", self.port)) {
+            let _ = s.write_all(b"\r\n\r\n");
+            let _ = s.flush();
+            let _ = s.shutdown(std::net::Shutdown::Both);
+        }
         if let Some(h) = self.handle.take() {
             let _ = h.join();
         }

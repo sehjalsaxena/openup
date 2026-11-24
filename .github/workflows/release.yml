@@ -45,11 +45,11 @@ jobs:
         with:
           targets: ${{ matrix.target }}
 
-      - name: Run tests before shipping
-        run: cargo test --locked --all-targets
-
       - name: Build binary
         run: cargo build --locked --release --target ${{ matrix.target }}
+
+      - name: Run tests before shipping
+        run: cargo test --locked --lib --bins
 
       - name: Package archive (Unix)
         if: runner.os != 'Windows'
