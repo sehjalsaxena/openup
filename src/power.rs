@@ -7,40 +7,28 @@ pub enum PowerState {
     Unknown,
 }
 
-#[cfg(target_os = "windows")]
-#[repr(C)]
-struct SystemPowerStatus {
-    ac_line_status: u8,
-    battery_flag: u8,
-    battery_life_percent: u8,
-    system_status_flag: u8,
-    battery_life_time: u32,
-    battery_full_life_time: u32,
-}
-
-#[cfg(target_os = "windows")]
-#[link(name = "kernel32")]
-extern "system" {
-    fn GetSystemPowerStatus(lpSystemPowerStatus: *mut SystemPowerStatus) -> i32;
-}
-
 pub fn current_power_state() -> PowerState {
     #[cfg(target_os = "windows")]
     {
-        let mut status = SystemPowerStatus {
-            ac_line_status: 255,
-            battery_flag: 255,
-            battery_life_percent: 255,
-            system_status_flag: 0,
-            battery_life_time: 0,
-            battery_full_life_time: 0,
-        };
-        let res = unsafe { GetSystemPowerStatus(&mut status) };
-        if res != 0 {
-            match status.ac_line_status {
-                0 => PowerState::Battery,
-                1 => PowerState::Ac,
-                _ => PowerState::Unknown,
+        use std::os::windows::process::CommandExt;
+        const CREATE_NO_WINDOW: u32 = 0x0800_0000;
+
+        let output = std::process::Command::new("powershell")
+            .args([
+                "-NoProfile",
+                "-NonInteractive",
+                "-Command",
+                "(Get-CimInstance -ClassName Win32_Battery -ErrorAction SilentlyContinue).BatteryStatus",
+            ])
+            .creation_flags(CREATE_NO_WINDOW)
+            .output();
+
+        if let Ok(out) = output {
+            let text = String::from_utf8_lossy(&out.stdout).trim().to_string();
+            if matches!(text.as_str(), "1" | "4" | "5") {
+                PowerState::Battery
+            } else {
+                PowerState::Ac
             }
         } else {
             PowerState::Unknown
@@ -57,9 +45,8 @@ pub fn current_power_state() -> PowerState {
                         if let Ok(status) = std::fs::read_to_string(path.join("status")) {
                             if status.trim().eq_ignore_ascii_case("Discharging") {
                                 return PowerState::Battery;
-                            } else {
-                                return PowerState::Ac;
                             }
+                            return PowerState::Ac;
                         }
                     }
                 }
@@ -71,14 +58,14 @@ pub fn current_power_state() -> PowerState {
     #[cfg(target_os = "macos")]
     {
         if let Ok(output) = std::process::Command::new("pmset")
-            .arg("-g")
-            .arg("batt")
+            .args(["-g", "batt"])
             .output()
         {
             let text = String::from_utf8_lossy(&output.stdout);
             if text.contains("Battery Power") {
                 return PowerState::Battery;
-            } else if text.contains("AC Power") {
+            }
+            if text.contains("AC Power") {
                 return PowerState::Ac;
             }
         }

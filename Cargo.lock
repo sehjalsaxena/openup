@@ -695,6 +695,20 @@ source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "9f7c3e4beb33f85d45ae3e3a1792185706c8e16d043238c593331cc7cd313b50"
 
 [[package]]
+name = "openup"
+version = "0.1.0"
+dependencies = [
+ "dirs",
+ "ratatui",
+ "regex",
+ "reqwest",
+ "rpassword",
+ "serde",
+ "serde_json",
+ "url",
+]
+
+[[package]]
 name = "option-ext"
 version = "0.2.0"
 source = "registry+https://github.com/rust-lang/crates.io-index"
@@ -1569,20 +1583,6 @@ source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "7265c9301c16a8711c992c2d8da90ee77ef54b1ed51482d6dfeb00dc756b1297"
 dependencies = [
  "rustls-pki-types",
-]
-
-[[package]]
-name = "openup"
-version = "0.1.0"
-dependencies = [
- "dirs",
- "ratatui",
- "regex",
- "reqwest",
- "rpassword",
- "serde",
- "serde_json",
- "url",
 ]
 
 [[package]]
