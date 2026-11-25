@@ -14,8 +14,6 @@ use std::os::windows::process::CommandExt;
 
 #[cfg(target_os = "windows")]
 const CREATE_NO_WINDOW: u32 = 0x0800_0000;
-#[cfg(target_os = "windows")]
-const DETACHED_PROCESS: u32 = 0x0000_0008;
 
 /// Loop period. Roam detection is a local, zero-packet check, so this is cheap.
 const TICK: Duration = Duration::from_secs(2);
@@ -360,7 +358,7 @@ pub fn start_background_daemon(config_dir: &Path) -> Result<String, String> {
         .stderr(std::process::Stdio::null());
 
     #[cfg(target_os = "windows")]
-    cmd.creation_flags(CREATE_NO_WINDOW | DETACHED_PROCESS);
+    cmd.creation_flags(CREATE_NO_WINDOW);
 
     let mut child = cmd
         .spawn()
@@ -403,16 +401,24 @@ pub fn stop_daemon(config_dir: &Path) -> Result<String, String> {
 
     #[cfg(target_os = "windows")]
     {
-        let mut cmd = std::process::Command::new("taskkill");
-        cmd.args([
-            "/PID",
-            &pid.to_string(),
-            "/FI",
-            &format!("IMAGENAME eq {}", crate::brand::WINDOWS_EXE),
-            "/F",
-        ])
-        .creation_flags(CREATE_NO_WINDOW);
-        let _ = cmd.output();
+        #[link(name = "kernel32")]
+        unsafe extern "system" {
+            fn OpenProcess(
+                dwDesiredAccess: u32,
+                bInheritHandle: i32,
+                dwProcessId: u32,
+            ) -> *mut std::ffi::c_void;
+            fn TerminateProcess(hProcess: *mut std::ffi::c_void, uExitCode: u32) -> i32;
+            fn CloseHandle(hObject: *mut std::ffi::c_void) -> i32;
+        }
+        const PROCESS_TERMINATE: u32 = 0x0001;
+        unsafe {
+            let handle = OpenProcess(PROCESS_TERMINATE, 0, pid);
+            if !handle.is_null() {
+                let _ = TerminateProcess(handle, 1);
+                let _ = CloseHandle(handle);
+            }
+        }
     }
 
     #[cfg(not(target_os = "windows"))]
