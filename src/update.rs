@@ -6,6 +6,7 @@ use std::fs;
 use std::path::{Path, PathBuf};
 
 const RELEASES_API_URL: &str = "https://api.github.com/repos/sehjalsaxena/openup/releases/latest";
+const RELEASES_WEB_URL: &str = "https://github.com/sehjalsaxena/openup/releases/latest";
 
 #[derive(Debug, Deserialize)]
 pub struct ReleaseAsset {
@@ -66,15 +67,22 @@ pub fn target_asset_name() -> Result<&'static str, String> {
     }
 }
 
-pub fn fetch_latest_release() -> Result<ReleaseInfo, String> {
+fn fetch_latest_release_api() -> Result<ReleaseInfo, String> {
     let client = reqwest::blocking::Client::builder()
         .user_agent(format!("openup/{}", env!("CARGO_PKG_VERSION")))
         .timeout(std::time::Duration::from_secs(10))
         .build()
         .map_err(|e| format!("Failed to create HTTP client: {e}"))?;
 
-    let resp = client
-        .get(RELEASES_API_URL)
+    let mut req = client.get(RELEASES_API_URL);
+    if let Ok(token) = env::var("GITHUB_TOKEN").or_else(|_| env::var("GH_TOKEN")) {
+        let trimmed = token.trim();
+        if !trimmed.is_empty() {
+            req = req.header(reqwest::header::AUTHORIZATION, format!("Bearer {trimmed}"));
+        }
+    }
+
+    let resp = req
         .send()
         .map_err(|e| format!("Could not reach GitHub Releases API: {e}"))?;
 
@@ -88,6 +96,73 @@ pub fn fetch_latest_release() -> Result<ReleaseInfo, String> {
 
     serde_json::from_str::<ReleaseInfo>(&text)
         .map_err(|e| format!("Could not parse release metadata: {e}"))
+}
+
+fn fetch_latest_release_redirect() -> Result<ReleaseInfo, String> {
+    let client = reqwest::blocking::Client::builder()
+        .user_agent(format!("openup/{}", env!("CARGO_PKG_VERSION")))
+        .redirect(reqwest::redirect::Policy::none())
+        .timeout(std::time::Duration::from_secs(10))
+        .build()
+        .map_err(|e| format!("Failed to create HTTP client: {e}"))?;
+
+    let resp = client
+        .get(RELEASES_WEB_URL)
+        .send()
+        .map_err(|e| format!("Could not reach GitHub releases page: {e}"))?;
+
+    let status = resp.status();
+    // GitHub redirects /releases/latest to /releases/tag/<tag> with 302 Found
+    let location = if status.is_redirection() {
+        resp.headers()
+            .get(reqwest::header::LOCATION)
+            .and_then(|v| v.to_str().ok())
+            .ok_or_else(|| {
+                "GitHub did not return a redirect location for latest release.".to_string()
+            })?
+            .to_string()
+    } else {
+        return Err(format!(
+            "Expected redirect from GitHub releases page, got HTTP {status}"
+        ));
+    };
+
+    let tag = location
+        .trim_end_matches('/')
+        .rsplit('/')
+        .next()
+        .ok_or_else(|| "Could not determine tag from redirect location.".to_string())?
+        .to_string();
+
+    if tag.is_empty() {
+        return Err("Empty release tag returned by GitHub.".into());
+    }
+
+    let asset_name = target_asset_name()?;
+    let download_url =
+        format!("https://github.com/sehjalsaxena/openup/releases/download/{tag}/{asset_name}");
+
+    Ok(ReleaseInfo {
+        tag_name: tag.clone(),
+        html_url: format!("https://github.com/sehjalsaxena/openup/releases/tag/{tag}"),
+        assets: vec![ReleaseAsset {
+            name: asset_name.to_string(),
+            browser_download_url: download_url,
+            size: 0,
+        }],
+    })
+}
+
+pub fn fetch_latest_release() -> Result<ReleaseInfo, String> {
+    match fetch_latest_release_api() {
+        Ok(info) => Ok(info),
+        Err(api_err) => {
+            // When GitHub API rate limits (HTTP 403/429) or is unavailable,
+            // fall back to web redirect discovery on /releases/latest
+            fetch_latest_release_redirect()
+                .map_err(|redirect_err| format!("{api_err} (fallback failed: {redirect_err})"))
+        }
+    }
 }
 
 pub fn run_update(check_only: bool, force: bool) -> Result<(), Box<dyn std::error::Error>> {
