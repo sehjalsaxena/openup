@@ -185,12 +185,10 @@ fn prompt_password_masked(prompt: &str) -> io::Result<String> {
                         "Password entry cancelled",
                     ));
                 }
-                KeyCode::Char(c) => {
-                    if c >= ' ' || c == '\t' {
-                        password.push(c);
-                        print!("*");
-                        io::stdout().flush()?;
-                    }
+                KeyCode::Char(c) if c >= ' ' || c == '\t' => {
+                    password.push(c);
+                    print!("*");
+                    io::stdout().flush()?;
                 }
                 _ => {}
             }
