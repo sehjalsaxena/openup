@@ -1,4 +1,5 @@
 pub mod brand;
+pub mod completions;
 pub mod config;
 pub mod connect;
 pub mod daemon;
@@ -11,4 +12,5 @@ pub mod state;
 pub mod tray;
 pub mod trust;
 pub mod tui;
+pub mod update;
 pub mod wifi;

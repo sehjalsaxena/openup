@@ -133,14 +133,17 @@ Signing in, probing the network and starting the keeper happen in the background
 | `openup portals forget HOST` | Stop trusting a portal |
 | `openup wifi add SSID` / `remove SSID` / `list` / `clear` | The only Wi-Fi networks OpenUp may rejoin by itself |
 | `openup notify [on\|off\|test]` | Manage or preview desktop notifications |
+| `openup tray` | Run in the desktop notification tray |
 | `openup log [-n N]` | Last N (default 30) log lines |
+| `openup update [--check]` | Check for or install the latest release in-place |
+| `openup completions SHELL` | Generate shell tab completions (powershell, bash, zsh, fish) |
 | `openup --version` / `--help` | |
 
 ## How the keeper works
 
 1. **Roaming:** every 2 seconds it checks your local IPv4 route (a local socket check, no packets). When the address changes between hostel and college, it probes and signs in immediately.
-2. **Wake from sleep:** if more than about 10 seconds of wall-clock time passed between two checks, it re-probes straight away.
-3. **Keep-alive:** while online it re-checks every 30 seconds.
+2. **Instant wake from sleep:** if more than 5 seconds of wall-clock time passed between checks (sleep/wake event), it immediately triggers a zero-delay probe and re-auth without waiting for the normal timer.
+3. **Keep-alive:** while online it re-checks every 30 seconds (60 seconds when on laptop battery power).
 4. **Portal detection:** a plain-HTTP request to Firefox's captive-portal endpoint; the redirect reveals the login page.
 5. **Verified sign-in:** after submitting your login it re-probes for up to about 4 seconds.
 6. **Circuit breaker:** it halts if the portal rejects your password, or if the portal says "logged in" three times but the internet stays locked (the count survives restarts). `openup creds` or the dashboard's `c` resumes it. Other failures back off 5 s, 10 s, 20 s ... up to 5 minutes.

@@ -19,8 +19,8 @@ const DETACHED_PROCESS: u32 = 0x0000_0008;
 
 /// Loop period. Roam detection is a local, zero-packet check, so this is cheap.
 const TICK: Duration = Duration::from_secs(2);
-/// If more wall-clock time than this passed between two ticks, the machine slept.
-const WAKE_GAP_SECS: u64 = 10;
+/// If more wall-clock time than this passed between two ticks (>= 2.5 * TICK), the machine slept.
+const WAKE_GAP_SECS: u64 = 5;
 /// Consecutive "portal said OK, internet still locked" results before giving up.
 const MAX_STILL_LOCKED: u32 = 3;
 /// Ticks between Wi-Fi reconnect attempts: starts at ~10 s, backs off to ~2 min.
@@ -119,10 +119,15 @@ pub fn run_daemon(
         let mut force_probe = once || first_tick;
         first_tick = false;
 
-        if last_tick_epoch != 0 && now.saturating_sub(last_tick_epoch) > WAKE_GAP_SECS {
-            log("Wake from sleep detected; re-checking the network");
+        if last_tick_epoch != 0 && now.saturating_sub(last_tick_epoch) >= WAKE_GAP_SECS {
+            let gap = now.saturating_sub(last_tick_epoch);
+            log(&format!(
+                "Wake from sleep detected ({gap}s gap); triggering immediate re-auth"
+            ));
             force_probe = true;
             next_allowed_probe_epoch = 0;
+            state.last_probe_epoch = 0;
+            reconnect_countdown = 0;
         }
 
         if state.halted_bad_credentials {
@@ -133,6 +138,7 @@ pub fn run_daemon(
                 state.still_locked_streak = 0;
                 force_probe = true;
                 next_allowed_probe_epoch = 0;
+                state.last_probe_epoch = 0;
                 log("Credentials updated; automatic login resumed");
             }
         }
@@ -158,6 +164,7 @@ pub fn run_daemon(
                             state.last_local_ip = Some(ip.to_string());
                             force_probe = true;
                             next_allowed_probe_epoch = 0;
+                            state.last_probe_epoch = 0;
                             reconnect_interval = RECONNECT_MIN_TICKS;
                             notify::notify_wifi_connected(config_dir, &ssids.join(", "));
                         } else {
@@ -179,6 +186,7 @@ pub fn run_daemon(
                     state.last_local_ip = Some(ip_str);
                     force_probe = true;
                     next_allowed_probe_epoch = 0;
+                    state.last_probe_epoch = 0;
                 }
             }
         }

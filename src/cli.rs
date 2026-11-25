@@ -42,6 +42,8 @@ Usage:
   openup notify [on|off|test]   Manage or test desktop notifications
   openup tray                   Run in the desktop notification tray
   openup log [-n N]             Show the last N log lines (default 30)
+  openup update [--check]       Check for or install the latest release
+  openup completions SHELL      Generate completions (powershell, bash, zsh, fish)
   openup --version | --help";
 
 pub fn run(args: Vec<String>) -> CliResult {
@@ -73,6 +75,8 @@ pub fn run(args: Vec<String>) -> CliResult {
         Some("notify") => cmd_notify(&dir, rest),
         Some("tray") => cmd_tray(&dir),
         Some("log") => cmd_log(&dir, rest),
+        Some("update") => cmd_update(rest),
+        Some("completions") => cmd_completions(rest),
         Some("--version" | "-V" | "version") => {
             println!("{} {}", brand::APP_NAME, env!("CARGO_PKG_VERSION"));
             Ok(())
@@ -134,9 +138,70 @@ fn cmd_open(dir: &Path) -> CliResult {
     Ok(())
 }
 
+fn prompt_password_masked(prompt: &str) -> io::Result<String> {
+    print!("{prompt}");
+    io::stdout().flush()?;
+
+    if !is_interactive() {
+        let mut line = String::new();
+        io::stdin().read_line(&mut line)?;
+        return Ok(line.trim_end_matches(['\r', '\n']).to_string());
+    }
+
+    use ratatui::crossterm::event::{self, Event, KeyCode, KeyEventKind, KeyModifiers};
+    use ratatui::crossterm::terminal::{disable_raw_mode, enable_raw_mode};
+
+    enable_raw_mode()?;
+    struct RawModeGuard;
+    impl Drop for RawModeGuard {
+        fn drop(&mut self) {
+            let _ = disable_raw_mode();
+        }
+    }
+    let _guard = RawModeGuard;
+
+    let mut password = String::new();
+    loop {
+        if let Event::Key(key_event) = event::read()? {
+            if key_event.kind != KeyEventKind::Press {
+                continue;
+            }
+            match key_event.code {
+                KeyCode::Enter => {
+                    break;
+                }
+                KeyCode::Backspace => {
+                    if password.pop().is_some() {
+                        print!("\x08 \x08");
+                        io::stdout().flush()?;
+                    }
+                }
+                KeyCode::Char('c') if key_event.modifiers.contains(KeyModifiers::CONTROL) => {
+                    println!();
+                    return Err(io::Error::new(
+                        io::ErrorKind::Interrupted,
+                        "Password entry cancelled",
+                    ));
+                }
+                KeyCode::Char(c) => {
+                    if c >= ' ' || c == '\t' {
+                        password.push(c);
+                        print!("*");
+                        io::stdout().flush()?;
+                    }
+                }
+                _ => {}
+            }
+        }
+    }
+    drop(_guard);
+    println!();
+    Ok(password)
+}
+
 fn prompt_and_save_credentials(dir: &Path) -> CliResult {
     let username = ask("Username: ")?;
-    let password = rpassword::prompt_password("Password: ")?;
+    let password = prompt_password_masked("Password: ")?;
 
     if username.is_empty() || password.is_empty() {
         return Err("Username and password cannot be empty.".into());
@@ -636,6 +701,32 @@ fn cmd_doctor(dir: &Path) -> CliResult {
         },
     );
 
+    // Check for updates (best effort, short timeout so doctor never blocks)
+    match crate::update::fetch_latest_release() {
+        Ok(rel) => {
+            let cur = env!("CARGO_PKG_VERSION");
+            match crate::update::compare_versions(cur, &rel.tag_name) {
+                crate::update::VersionStatus::NewerAvailable { latest, .. } => {
+                    report(
+                        Level::Info,
+                        "Update",
+                        format!("{latest} available (run `openup update`)"),
+                    );
+                }
+                crate::update::VersionStatus::UpToDate(_) => {
+                    report(Level::Ok, "Update", format!("up to date (v{cur})"));
+                }
+            }
+        }
+        Err(_) => {
+            report(
+                Level::Info,
+                "Update",
+                "could not check (offline)".to_string(),
+            );
+        }
+    }
+
     println!();
     match (fails, warns) {
         (0, 0) => println!("Everything looks good."),
@@ -645,4 +736,27 @@ fn cmd_doctor(dir: &Path) -> CliResult {
         }
     }
     Ok(())
+}
+
+fn cmd_completions(args: &[String]) -> CliResult {
+    let shell = args
+        .first()
+        .map(String::as_str)
+        .ok_or("Usage: openup completions <powershell|bash|zsh|fish>")?;
+    let script = crate::completions::generate_completion(shell)?;
+    print!("{script}");
+    Ok(())
+}
+
+fn cmd_update(args: &[String]) -> CliResult {
+    let mut check = false;
+    let mut force = false;
+    for arg in args {
+        match arg.as_str() {
+            "--check" => check = true,
+            "--force" => force = true,
+            other => return Err(format!("Unknown option '{other}' for openup update.").into()),
+        }
+    }
+    crate::update::run_update(check, force)
 }

@@ -299,3 +299,27 @@ fn notify_command_reports_and_toggles_status() {
     assert!(text.contains("OpenUp: Signed In"));
     assert!(!text.contains('—'));
 }
+
+#[test]
+fn completions_command_generates_scripts() {
+    let d = dir("cli_completions");
+    for shell in ["powershell", "bash", "zsh", "fish"] {
+        let o = openup(&d, DEAD_PROBE, &["completions", shell]);
+        assert!(o.status.success(), "completions for {shell} failed");
+        let script = out(&o);
+        assert!(script.contains("openup"));
+        assert!(script.contains("keeper"));
+        assert!(script.contains("update"));
+    }
+
+    let bad = openup(&d, DEAD_PROBE, &["completions", "unknownshell"]);
+    assert!(!bad.status.success());
+}
+
+#[test]
+fn update_command_help_and_parsing() {
+    let d = dir("cli_update");
+    let h = openup(&d, DEAD_PROBE, &["--help"]);
+    assert!(out(&h).contains("openup update"));
+    assert!(out(&h).contains("openup completions"));
+}
