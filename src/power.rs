@@ -7,28 +7,40 @@ pub enum PowerState {
     Unknown,
 }
 
+#[cfg(target_os = "windows")]
+#[repr(C)]
+struct SystemPowerStatus {
+    ac_line_status: u8,
+    battery_flag: u8,
+    battery_life_percent: u8,
+    system_status_flag: u8,
+    battery_life_time: u32,
+    battery_full_life_time: u32,
+}
+
+#[cfg(target_os = "windows")]
+#[link(name = "kernel32")]
+unsafe extern "system" {
+    fn GetSystemPowerStatus(lpSystemPowerStatus: *mut SystemPowerStatus) -> i32;
+}
+
 pub fn current_power_state() -> PowerState {
     #[cfg(target_os = "windows")]
     {
-        use std::os::windows::process::CommandExt;
-        const CREATE_NO_WINDOW: u32 = 0x0800_0000;
-
-        let output = std::process::Command::new("powershell")
-            .args([
-                "-NoProfile",
-                "-NonInteractive",
-                "-Command",
-                "(Get-CimInstance -ClassName Win32_Battery -ErrorAction SilentlyContinue).BatteryStatus",
-            ])
-            .creation_flags(CREATE_NO_WINDOW)
-            .output();
-
-        if let Ok(out) = output {
-            let text = String::from_utf8_lossy(&out.stdout).trim().to_string();
-            if matches!(text.as_str(), "1" | "4" | "5") {
-                PowerState::Battery
-            } else {
-                PowerState::Ac
+        let mut status = SystemPowerStatus {
+            ac_line_status: 255,
+            battery_flag: 255,
+            battery_life_percent: 255,
+            system_status_flag: 0,
+            battery_life_time: 0,
+            battery_full_life_time: 0,
+        };
+        let res = unsafe { GetSystemPowerStatus(&mut status) };
+        if res != 0 {
+            match status.ac_line_status {
+                0 => PowerState::Battery,
+                1 => PowerState::Ac,
+                _ => PowerState::Unknown,
             }
         } else {
             PowerState::Unknown

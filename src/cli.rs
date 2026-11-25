@@ -701,29 +701,31 @@ fn cmd_doctor(dir: &Path) -> CliResult {
         },
     );
 
-    // Check for updates (best effort, short timeout so doctor never blocks)
-    match update::fetch_latest_release() {
-        Ok(rel) => {
-            let cur = env!("CARGO_PKG_VERSION");
-            match update::compare_versions(cur, &rel.tag_name) {
-                update::VersionStatus::NewerAvailable { latest, .. } => {
-                    report(
-                        Level::Info,
-                        "Update",
-                        format!("{latest} available (run `openup update`)"),
-                    );
-                }
-                update::VersionStatus::UpToDate(_) => {
-                    report(Level::Ok, "Update", format!("up to date (v{cur})"));
+    // Check for updates (best effort, short timeout so doctor never blocks, skipped in offline integration tests)
+    if std::env::var("OPENUP_PROBE_URL").is_err() {
+        match update::fetch_latest_release() {
+            Ok(rel) => {
+                let cur = env!("CARGO_PKG_VERSION");
+                match update::compare_versions(cur, &rel.tag_name) {
+                    update::VersionStatus::NewerAvailable { latest, .. } => {
+                        report(
+                            Level::Info,
+                            "Update",
+                            format!("{latest} available (run `openup update`)"),
+                        );
+                    }
+                    update::VersionStatus::UpToDate(_) => {
+                        report(Level::Ok, "Update", format!("up to date (v{cur})"));
+                    }
                 }
             }
-        }
-        Err(_) => {
-            report(
-                Level::Info,
-                "Update",
-                "could not check (offline)".to_string(),
-            );
+            Err(_) => {
+                report(
+                    Level::Info,
+                    "Update",
+                    "could not check (offline)".to_string(),
+                );
+            }
         }
     }
 
