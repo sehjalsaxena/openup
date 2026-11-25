@@ -51,28 +51,19 @@ pub fn compare_versions(current: &str, latest: &str) -> VersionStatus {
 }
 
 pub fn target_asset_name() -> Result<&'static str, String> {
-    #[cfg(all(target_os = "windows", target_arch = "x86_64"))]
-    {
-        return Ok("openup-windows-amd64.zip");
+    if cfg!(all(target_os = "windows", target_arch = "x86_64")) {
+        Ok("openup-windows-amd64.zip")
+    } else if cfg!(all(target_os = "linux", target_arch = "x86_64")) {
+        Ok("openup-linux-amd64.tar.gz")
+    } else if cfg!(all(target_os = "linux", target_arch = "aarch64")) {
+        Ok("openup-linux-arm64.tar.gz")
+    } else if cfg!(all(target_os = "macos", target_arch = "x86_64")) {
+        Ok("openup-darwin-amd64.tar.gz")
+    } else if cfg!(all(target_os = "macos", target_arch = "aarch64")) {
+        Ok("openup-darwin-arm64.tar.gz")
+    } else {
+        Err("Unsupported operating system or CPU architecture for self-updating.".into())
     }
-    #[cfg(all(target_os = "linux", target_arch = "x86_64"))]
-    {
-        return Ok("openup-linux-amd64.tar.gz");
-    }
-    #[cfg(all(target_os = "linux", target_arch = "aarch64"))]
-    {
-        return Ok("openup-linux-arm64.tar.gz");
-    }
-    #[cfg(all(target_os = "macos", target_arch = "x86_64"))]
-    {
-        return Ok("openup-darwin-amd64.tar.gz");
-    }
-    #[cfg(all(target_os = "macos", target_arch = "aarch64"))]
-    {
-        return Ok("openup-darwin-arm64.tar.gz");
-    }
-    #[allow(unreachable_code)]
-    Err("Unsupported operating system or CPU architecture for self-updating.".into())
 }
 
 pub fn fetch_latest_release() -> Result<ReleaseInfo, String> {
@@ -91,7 +82,11 @@ pub fn fetch_latest_release() -> Result<ReleaseInfo, String> {
         return Err(format!("GitHub API returned HTTP {}", resp.status()));
     }
 
-    resp.json::<ReleaseInfo>()
+    let text = resp
+        .text()
+        .map_err(|e| format!("Could not read release response: {e}"))?;
+
+    serde_json::from_str::<ReleaseInfo>(&text)
         .map_err(|e| format!("Could not parse release metadata: {e}"))
 }
 
@@ -104,9 +99,6 @@ pub fn run_update(check_only: bool, force: bool) -> Result<(), Box<dyn std::erro
     match status {
         VersionStatus::UpToDate(_) if !force => {
             println!("openup is already up to date ({}).", release.tag_name);
-            if check_only {
-                return Ok(());
-            }
             return Ok(());
         }
         VersionStatus::NewerAvailable { current, latest } => {
@@ -137,12 +129,10 @@ pub fn run_update(check_only: bool, force: bool) -> Result<(), Box<dyn std::erro
         .timeout(std::time::Duration::from_secs(60))
         .build()?;
 
-    let resp = client.get(&asset.browser_download_url).send()?;
+    let mut resp = client.get(&asset.browser_download_url).send()?;
     if !resp.status().is_success() {
         return Err(format!("Download failed with HTTP {}", resp.status()).into());
     }
-
-    let bytes = resp.bytes()?;
 
     let temp_dir = env::temp_dir().join(format!("openup_update_{}", std::process::id()));
     if temp_dir.exists() {
@@ -151,7 +141,8 @@ pub fn run_update(check_only: bool, force: bool) -> Result<(), Box<dyn std::erro
     fs::create_dir_all(&temp_dir)?;
 
     let archive_path = temp_dir.join(&asset.name);
-    fs::write(&archive_path, &bytes)?;
+    let mut file = fs::File::create(&archive_path)?;
+    std::io::copy(&mut resp, &mut file)?;
 
     println!("Extracting archive...");
     extract_archive(&archive_path, &temp_dir)?;
@@ -202,9 +193,9 @@ fn extract_archive(archive: &Path, dest: &Path) -> Result<(), Box<dyn std::error
         let status = std::process::Command::new("tar")
             .args([
                 "-xzf",
-                archive.to_str().unwrap(),
+                archive.to_str().unwrap_or_default(),
                 "-C",
-                dest.to_str().unwrap(),
+                dest.to_str().unwrap_or_default(),
             ])
             .status()?;
         if !status.success() {
