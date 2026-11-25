@@ -1127,9 +1127,16 @@ mod tests {
         let port = listener.local_addr().unwrap().port();
         let active_gw = format!("http://127.0.0.1:{}", port);
         assert!(is_gateway_reachable(&active_gw));
-
         drop(listener);
-        assert!(!is_gateway_reachable(&active_gw));
+
+        // Bind and immediately drop an unused port without ever connecting to it.
+        // It has no established connections or lingering backlog in the OS kernel.
+        let closed_port = {
+            let l = TcpListener::bind("127.0.0.1:0").unwrap();
+            l.local_addr().unwrap().port()
+        };
+        let inactive_gw = format!("http://127.0.0.1:{}", closed_port);
+        assert!(!is_gateway_reachable(&inactive_gw));
     }
 
     #[test]

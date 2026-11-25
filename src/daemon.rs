@@ -14,6 +14,8 @@ use std::os::windows::process::CommandExt;
 
 #[cfg(target_os = "windows")]
 const CREATE_NO_WINDOW: u32 = 0x0800_0000;
+#[cfg(target_os = "windows")]
+const DETACHED_PROCESS: u32 = 0x0000_0008;
 
 /// Loop period. Roam detection is a local, zero-packet check, so this is cheap.
 const TICK: Duration = Duration::from_secs(2);
@@ -358,7 +360,7 @@ pub fn start_background_daemon(config_dir: &Path) -> Result<String, String> {
         .stderr(std::process::Stdio::null());
 
     #[cfg(target_os = "windows")]
-    cmd.creation_flags(CREATE_NO_WINDOW);
+    cmd.creation_flags(DETACHED_PROCESS);
 
     let mut child = cmd
         .spawn()
