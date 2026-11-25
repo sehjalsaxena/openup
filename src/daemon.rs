@@ -360,7 +360,30 @@ pub fn start_background_daemon(config_dir: &Path) -> Result<String, String> {
         .stderr(std::process::Stdio::null());
 
     #[cfg(target_os = "windows")]
-    cmd.creation_flags(DETACHED_PROCESS);
+    {
+        cmd.creation_flags(DETACHED_PROCESS);
+        #[link(name = "kernel32")]
+        unsafe extern "system" {
+            fn GetStdHandle(nStdHandle: u32) -> *mut std::ffi::c_void;
+            fn SetHandleInformation(
+                hObject: *mut std::ffi::c_void,
+                dwMask: u32,
+                dwFlags: u32,
+            ) -> i32;
+        }
+        const STD_INPUT_HANDLE: u32 = -10i32 as u32;
+        const STD_OUTPUT_HANDLE: u32 = -11i32 as u32;
+        const STD_ERROR_HANDLE: u32 = -12i32 as u32;
+        const HANDLE_FLAG_INHERIT: u32 = 0x0000_0001;
+        unsafe {
+            for std_h in [STD_INPUT_HANDLE, STD_OUTPUT_HANDLE, STD_ERROR_HANDLE] {
+                let h = GetStdHandle(std_h);
+                if !h.is_null() && h != (-1isize as *mut std::ffi::c_void) {
+                    let _ = SetHandleInformation(h, HANDLE_FLAG_INHERIT, 0);
+                }
+            }
+        }
+    }
 
     let mut child = cmd
         .spawn()
@@ -411,13 +434,16 @@ pub fn stop_daemon(config_dir: &Path) -> Result<String, String> {
                 dwProcessId: u32,
             ) -> *mut std::ffi::c_void;
             fn TerminateProcess(hProcess: *mut std::ffi::c_void, uExitCode: u32) -> i32;
+            fn WaitForSingleObject(hHandle: *mut std::ffi::c_void, dwMilliseconds: u32) -> u32;
             fn CloseHandle(hObject: *mut std::ffi::c_void) -> i32;
         }
         const PROCESS_TERMINATE: u32 = 0x0001;
+        const SYNCHRONIZE: u32 = 0x0010_0000;
         unsafe {
-            let handle = OpenProcess(PROCESS_TERMINATE, 0, pid);
+            let handle = OpenProcess(PROCESS_TERMINATE | SYNCHRONIZE, 0, pid);
             if !handle.is_null() {
                 let _ = TerminateProcess(handle, 1);
+                let _ = WaitForSingleObject(handle, 2000);
                 let _ = CloseHandle(handle);
             }
         }
