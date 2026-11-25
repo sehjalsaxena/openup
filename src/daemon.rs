@@ -514,7 +514,7 @@ pub fn print_status(config_dir: &Path) {
     if state.last_login_epoch > 0 {
         println!(
             "Last Login:       {}",
-            logger::format_utc(state.last_login_epoch)
+            logger::format_local(state.last_login_epoch)
         );
     }
     println!("Failure Streak:   {}", state.failure_streak);

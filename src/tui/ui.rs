@@ -197,7 +197,7 @@ fn render_status(f: &mut Frame, area: Rect, app: &App) {
     };
 
     let last_login = if st.last_login_epoch > 0 {
-        format!("  (last {})", logger::format_utc(st.last_login_epoch))
+        format!("  (last {})", logger::format_local(st.last_login_epoch))
     } else {
         String::new()
     };
@@ -308,11 +308,17 @@ fn render_wifi(f: &mut Frame, area: Rect, app: &App) {
     f.render_stateful_widget(list, area, &mut state);
 }
 
-/// `[2026-11-18 11:03:00Z] message` -> (`11:03:00`, `message`)
+/// `[2026-11-18 11:03:00] message` or `[2026-11-18 11:03:00Z] message` -> (`11:03:00`, `message`)
+/// If the timestamp is in UTC (`...Z`), it is converted to the user's local time.
 fn split_log_line(line: &str) -> (String, String) {
     if let Some(rest) = line.strip_prefix('[')
         && let Some((ts, msg)) = rest.split_once("] ")
     {
+        if ts.ends_with('Z')
+            && let Some(epoch) = logger::parse_utc_timestamp(ts)
+        {
+            return (logger::format_local_time(epoch), msg.to_string());
+        }
         let time = ts.get(11..19).unwrap_or(ts);
         return (time.to_string(), msg.to_string());
     }
@@ -565,9 +571,9 @@ mod tests {
             trusted: vec!["172.16.68.6".into(), "10.20.0.1".into()],
             ssids: vec!["College_WiFi".into()],
             log: vec![
-                "[2026-11-18 09:01:02Z] Keeper started (pid 4242)".into(),
-                "[2026-11-18 09:01:05Z] Login verified at http://172.16.68.6:8090".into(),
-                "[2026-11-18 10:30:00Z] Blocked login: portal host 10.9.9.9 is not trusted".into(),
+                "[2026-11-18 09:01:02] Keeper started (pid 4242)".into(),
+                "[2026-11-18 09:01:05] Login verified at http://172.16.68.6:8090".into(),
+                "[2026-11-18 10:30:00] Blocked login: portal host 10.9.9.9 is not trusted".into(),
             ],
         };
         let mut app = App::new(snap);
@@ -748,13 +754,18 @@ mod tests {
     #[test]
     fn log_lines_are_shortened_to_the_time_of_day() {
         assert_eq!(
-            split_log_line("[2026-11-18 09:01:02Z] Keeper started"),
+            split_log_line("[2026-11-18 09:01:02] Keeper started"),
             ("09:01:02".to_string(), "Keeper started".to_string())
         );
         assert_eq!(
             split_log_line("plain"),
             (String::new(), "plain".to_string())
         );
+        let (converted_time, msg) = split_log_line("[2026-11-18 09:01:02Z] Keeper started");
+        assert_eq!(msg, "Keeper started");
+        assert_eq!(converted_time.len(), 8);
+        assert!(converted_time.contains(':'));
+
         let text = draw(&sample_app(), 100, 30);
         assert!(text.contains("09:01:05"));
         assert!(
