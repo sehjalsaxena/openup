@@ -1,6 +1,7 @@
 //! Command-line front end: argument dispatch and the non-dashboard commands.
 
 use openup::brand;
+use openup::completions;
 use openup::config::{self, Settings};
 use openup::connect::{self, Outcome};
 use openup::daemon;
@@ -11,6 +12,7 @@ use openup::probe::{self, ProbeResult};
 use openup::state::DaemonState;
 use openup::trust::{self, TrustStore};
 use openup::tui;
+use openup::update;
 use std::io::{self, IsTerminal, Write};
 use std::path::Path;
 
@@ -702,18 +704,18 @@ fn cmd_doctor(dir: &Path) -> CliResult {
     );
 
     // Check for updates (best effort, short timeout so doctor never blocks)
-    match crate::update::fetch_latest_release() {
+    match update::fetch_latest_release() {
         Ok(rel) => {
             let cur = env!("CARGO_PKG_VERSION");
-            match crate::update::compare_versions(cur, &rel.tag_name) {
-                crate::update::VersionStatus::NewerAvailable { latest, .. } => {
+            match update::compare_versions(cur, &rel.tag_name) {
+                update::VersionStatus::NewerAvailable { latest, .. } => {
                     report(
                         Level::Info,
                         "Update",
                         format!("{latest} available (run `openup update`)"),
                     );
                 }
-                crate::update::VersionStatus::UpToDate(_) => {
+                update::VersionStatus::UpToDate(_) => {
                     report(Level::Ok, "Update", format!("up to date (v{cur})"));
                 }
             }
@@ -743,7 +745,7 @@ fn cmd_completions(args: &[String]) -> CliResult {
         .first()
         .map(String::as_str)
         .ok_or("Usage: openup completions <powershell|bash|zsh|fish>")?;
-    let script = crate::completions::generate_completion(shell)?;
+    let script = completions::generate_completion(shell)?;
     print!("{script}");
     Ok(())
 }
@@ -758,5 +760,5 @@ fn cmd_update(args: &[String]) -> CliResult {
             other => return Err(format!("Unknown option '{other}' for openup update.").into()),
         }
     }
-    crate::update::run_update(check, force)
+    update::run_update(check, force)
 }
