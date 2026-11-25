@@ -213,10 +213,10 @@ fn find_file_recursive(dir: &Path, filename: &str) -> Option<PathBuf> {
             if path.is_file() && path.file_name().and_then(|n| n.to_str()) == Some(filename) {
                 return Some(path);
             }
-            if path.is_dir() {
-                if let Some(found) = find_file_recursive(&path, filename) {
-                    return Some(found);
-                }
+            if path.is_dir()
+                && let Some(found) = find_file_recursive(&path, filename)
+            {
+                return Some(found);
             }
         }
     }

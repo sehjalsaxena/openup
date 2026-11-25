@@ -40,15 +40,14 @@ pub fn current_power_state() -> PowerState {
         if let Ok(entries) = std::fs::read_dir("/sys/class/power_supply") {
             for entry in entries.flatten() {
                 let path = entry.path();
-                if let Ok(supply_type) = std::fs::read_to_string(path.join("type")) {
-                    if supply_type.trim().eq_ignore_ascii_case("Battery") {
-                        if let Ok(status) = std::fs::read_to_string(path.join("status")) {
-                            if status.trim().eq_ignore_ascii_case("Discharging") {
-                                return PowerState::Battery;
-                            }
-                            return PowerState::Ac;
-                        }
+                if let Ok(supply_type) = std::fs::read_to_string(path.join("type"))
+                    && supply_type.trim().eq_ignore_ascii_case("Battery")
+                    && let Ok(status) = std::fs::read_to_string(path.join("status"))
+                {
+                    if status.trim().eq_ignore_ascii_case("Discharging") {
+                        return PowerState::Battery;
                     }
+                    return PowerState::Ac;
                 }
             }
         }
